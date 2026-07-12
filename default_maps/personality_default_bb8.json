@@ -1,0 +1,11 @@
+{
+  "name": "BB-8",
+  "locked": true,
+  "traits": {
+    "brave": 4,
+    "curious": 5,
+    "sassy": 3,
+    "playful": 5,
+    "sensitive": 4
+  }
+}

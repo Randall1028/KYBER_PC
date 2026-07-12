@@ -1,0 +1,10 @@
+{
+  "name": "BD-1",
+  "traits": {
+    "brave": 3,
+    "curious": 5,
+    "sassy": 2,
+    "playful": 4,
+    "sensitive": 5
+  }
+}

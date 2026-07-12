@@ -1,0 +1,13 @@
+requests==2.34.2
+faster-whisper==1.2.1
+sounddevice==0.5.5
+numpy==2.5.1
+winrt-Windows.Devices.Bluetooth.Advertisement[all]==3.2.1
+winrt-Windows.Storage.Streams[all]==3.2.1
+pydBeacon==1.0.0
+bleak==3.0.2
+pyDroidDepot==1.1.0
+pystray==0.19.5
+pywebview==6.2.1
+Pillow==12.3.0
+python-dotenv==1.2.2

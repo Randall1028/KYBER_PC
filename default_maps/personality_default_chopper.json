@@ -1,0 +1,11 @@
+{
+  "name": "Chopper",
+  "locked": true,
+  "traits": {
+    "brave": 4,
+    "curious": 2,
+    "sassy": 5,
+    "playful": 2,
+    "sensitive": 2
+  }
+}

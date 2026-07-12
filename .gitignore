@@ -1,0 +1,50 @@
+# ─────────────────────────────────────────────────────────────
+# KYBER (Windows edition) — .gitignore
+# Commit the source; keep out builds, the venv, downloaded models,
+# and anything personal (your .env has your droid's MAC address).
+# ─────────────────────────────────────────────────────────────
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# --- Virtual environment ---
+venv/
+.venv/
+env/
+
+# --- PyInstaller build output ---
+build/
+dist/
+dist_old/
+# NOTE: KYBER.spec is hand-written and IS tracked — do not ignore *.spec
+
+# --- Installer output (distribute the .exe via GitHub Releases, not the repo) ---
+installer_output/
+*.exe
+
+# --- Runtime downloaded/created on first run (the ~5 GB lives here in dev runs) ---
+runtime/
+models/
+
+# --- Local config — NEVER commit (contains your droid's MAC, etc.) ---
+.env
+
+# --- User data created at runtime (seeded from default_maps/) ---
+personality_maps/
+
+# --- Worker handshake artifacts ---
+claim_result.json
+claim_connect_result.json
+activation_result.json
+
+# --- OS / editor cruft ---
+.DS_Store
+Thumbs.db
+Desktop.ini
+.vscode/
+.idea/
+*.swp
+*.log

@@ -1,0 +1,11 @@
+{
+  "name": "R2-D2",
+  "locked": true,
+  "traits": {
+    "brave": 5,
+    "curious": 4,
+    "sassy": 5,
+    "playful": 3,
+    "sensitive": 3
+  }
+}

@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Acoustic Package</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap');
+  @import url('https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/3.35.0/tabler-icons-outline.min.css');
+
+  :root {
+    --void: #051222; --deep: #0d1726; --panel: #203955; --edge: #394D6B; --dim: #1B3048;
+    --blue: #00a8ff; --text: #eef1f7; --muted: #8FAEC1;
+    --success: #2ecc71; --warning: #ffc857; --error: #e63946;
+    --shadow: rgba(0,5,16,0.5);
+    --gold-light: #C79C72; --gold-dark: #7C573D; --gold-text: #ECDBC5;
+    --gold-border-light: #F1D3B6; --gold-border-dark: #907060;
+    --glow: 0 0 16px rgba(236,219,197,0.3);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  .ti { color: var(--muted); }
+
+  body { background: radial-gradient(circle at 50% -10%, var(--deep) 0%, var(--void) 55%); color: var(--text); font-family: 'Quicksand', sans-serif; min-height: 100vh; overflow-x: hidden; position: relative; }
+
+  body::after {
+    content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background-image:
+      radial-gradient(1px 1px at 10% 15%, rgba(255,255,255,0.4) 0%, transparent 100%),
+      radial-gradient(1px 1px at 55% 25%, rgba(255,255,255,0.4) 0%, transparent 100%),
+      radial-gradient(1px 1px at 90% 20%, rgba(255,255,255,0.3) 0%, transparent 100%),
+      radial-gradient(1px 1px at 20% 85%, rgba(255,255,255,0.2) 0%, transparent 100%),
+      radial-gradient(1px 1px at 85% 75%, rgba(255,255,255,0.3) 0%, transparent 100%);
+  }
+
+  .container { position: relative; z-index: 1; max-width: 480px; margin: 0 auto; padding: 16px; padding-bottom: 48px; }
+
+  .header { text-align: center; padding: 20px 0 16px; margin-bottom: 20px; }
+  .header-title { font-family: 'Quicksand', sans-serif; font-size: 22px; font-weight: 700; color: var(--gold-text); text-shadow: var(--glow); letter-spacing: 0.05em; text-transform: uppercase; }
+  .header-sub { font-size: 12px; color: var(--muted); letter-spacing: 0.04em; margin-top: 4px; font-family: 'Quicksand', sans-serif; }
+
+  .sound-profile-badge { display: inline-block; background: rgba(0,168,255,0.08); border: 1px solid rgba(0,168,255,0.3); border-radius: 999px; padding: 4px 12px; font-size: 11px; color: var(--blue); letter-spacing: 0.05em; margin-bottom: 14px; font-family: 'Quicksand', sans-serif; }
+
+  .r2-avatar { display: flex; justify-content: center; margin: 8px 0 16px; }
+  .r2-svg { width: 64px; height: 64px; filter: drop-shadow(0 0 12px rgba(0,168,255,0.45)); }
+  .r2-svg.playing { animation: pulse-r2 0.5s ease-in-out infinite alternate; }
+  @keyframes pulse-r2 { from { filter: drop-shadow(0 0 8px rgba(0,168,255,0.35)); transform: scale(1); } to { filter: drop-shadow(0 0 20px rgba(0,168,255,0.85)); transform: scale(1.04); } }
+
+  .progress-panel { border: 1px solid transparent; border-radius: 16px; padding: 14px 16px; margin-bottom: 16px;
+    background-image: linear-gradient(135deg, var(--panel) 0%, var(--void) 100%), linear-gradient(135deg, var(--edge) 0%, var(--dim) 100%);
+    background-origin: border-box; background-clip: padding-box, border-box; box-shadow: 0 2px 4px var(--shadow); }
+  .progress-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .sound-id { font-family: 'Quicksand', sans-serif; font-size: 28px; font-weight: 700; color: var(--blue); }
+  .progress-stats { text-align: right; font-size: 12px; color: var(--muted); line-height: 1.6; }
+  .progress-bar-track { height: 6px; background: var(--dim); border-radius: 3px; overflow: hidden; }
+  .progress-bar-fill { height: 100%; background: linear-gradient(90deg, var(--blue), var(--success)); border-radius: 3px; transition: width 0.4s ease; box-shadow: 0 0 8px rgba(0,168,255,0.5); }
+  .progress-label { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 5px; }
+  .current-labels { min-height: 32px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(143,174,193,0.18); }
+  .current-labels-title { font-size: 11px; color: var(--muted); width: 100%; }
+  .label-badge { background: rgba(0,168,255,0.1); border: 1px solid rgba(0,168,255,0.3); color: var(--blue); font-size: 12px; padding: 3px 10px; border-radius: 20px; }
+
+  .transport { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+  .btn { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 14px 8px; border-radius: 12px; border: 1px solid var(--edge); background: rgba(255,255,255,0.03); color: var(--text); font-family: 'Quicksand', sans-serif; font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.15s; user-select: none; }
+  .btn:active { transform: scale(0.94); }
+  .btn svg { width: 22px; height: 22px; }
+  .btn-play { border-color: var(--blue); color: var(--blue); }
+  .btn-play:hover, .btn-play.active { background: rgba(0,168,255,0.12); box-shadow: var(--glow); }
+  .btn-back:hover, .btn-next:hover { background: rgba(255,255,255,0.05); }
+  .btn-skip { border-color: var(--warning); color: var(--warning); }
+  .btn-skip:hover { background: rgba(255,200,87,0.08); }
+  .btn-stop { border-color: var(--error); color: var(--error); }
+  .btn-stop:hover { background: rgba(230,57,70,0.08); }
+
+  .section-title { font-family: 'Quicksand', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; color: var(--gold-text); text-transform: uppercase; margin-bottom: 10px; }
+
+  .emotion-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+  .emotion-btn { padding: 14px 6px; border-radius: 12px; border: 1px solid transparent; color: var(--text); font-family: 'Quicksand', sans-serif; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s; text-align: center; user-select: none; line-height: 1.4;
+    background-image: linear-gradient(135deg, var(--panel) 0%, var(--void) 100%), linear-gradient(135deg, var(--edge) 0%, var(--dim) 100%);
+    background-origin: border-box; background-clip: padding-box, border-box; box-shadow: 0 2px 4px var(--shadow); }
+  .emotion-btn:active { transform: scale(0.94); }
+  .emotion-btn.selected {
+    background-image: linear-gradient(135deg, #697658 0%, #1A2A1C 100%), linear-gradient(135deg, #697658, #1A2A1C);
+    color: var(--text); box-shadow: 0 2px 4px var(--shadow);
+  }
+  .emotion-btn.selected i { color: var(--text); }
+  .emotion-btn .emoji { font-size: 18px; display: block; margin-bottom: 2px; }
+
+  .custom-row { display: flex; gap: 8px; margin-bottom: 16px; }
+  .custom-input { flex: 1; background: rgba(255,255,255,0.04); border: 1px solid var(--edge); border-radius: 10px; color: var(--text); font-family: 'Quicksand', sans-serif; font-size: 14px; padding: 12px 14px; outline: none; transition: border-color 0.2s; }
+  .custom-input:focus { border-color: var(--blue); }
+  .custom-input::placeholder { color: var(--muted); }
+  .btn-add-custom {
+    border: 1px solid transparent; border-radius: 10px; padding: 12px 16px;
+    font-family: 'Quicksand', sans-serif; font-size: 13px; font-weight: 600; color: #fff; cursor: pointer; white-space: nowrap;
+    background-image: linear-gradient(135deg, #1D4268, #0D2C4D), linear-gradient(135deg, var(--edge), var(--dim));
+    background-origin: border-box; background-clip: padding-box, border-box; box-shadow: 0 2px 4px var(--shadow);
+  }
+  .btn-add-custom:hover {
+    background-image: linear-gradient(135deg, var(--gold-light), var(--gold-dark)), linear-gradient(135deg, var(--gold-border-light), var(--gold-border-dark));
+    color: var(--gold-text);
+  }
+
+  .btn-confirm {
+    width: 100%; padding: 16px; border-radius: 12px; border: 1px solid transparent;
+    font-family: 'Quicksand', sans-serif; font-size: 14px; font-weight: 700; color: #fff; cursor: pointer; margin-bottom: 24px;
+    background-image: linear-gradient(135deg, #1D4268, #0D2C4D), linear-gradient(135deg, var(--edge), var(--dim));
+    background-origin: border-box; background-clip: padding-box, border-box; box-shadow: 0 2px 4px var(--shadow);
+  }
+  .btn-confirm:hover {
+    background-image: linear-gradient(135deg, var(--gold-light), var(--gold-dark)), linear-gradient(135deg, var(--gold-border-light), var(--gold-border-dark));
+    color: var(--gold-text);
+  }
+  .btn-confirm:disabled { opacity: 0.4; cursor: default; }
+
+  .export-panel { border: 1px solid transparent; border-radius: 16px; padding: 14px 16px; margin-bottom: 16px;
+    background-image: linear-gradient(135deg, var(--panel) 0%, var(--void) 100%), linear-gradient(135deg, var(--edge) 0%, var(--dim) 100%);
+    background-origin: border-box; background-clip: padding-box, border-box; box-shadow: 0 2px 4px var(--shadow); }
+  .export-stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+  .stat-box { text-align: center; padding: 10px 4px; border: 1px solid rgba(143,174,193,0.18); border-radius: 10px; }
+  .stat-num { font-family: 'Quicksand', sans-serif; font-size: 22px; font-weight: 700; color: var(--blue); }
+  .stat-num.green { color: var(--success); }
+  .stat-num.orange { color: var(--warning); }
+  .stat-label { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .btn-save {
+    width: 100%; padding: 14px; border-radius: 12px; border: 1px solid transparent;
+    font-family: 'Quicksand', sans-serif; font-size: 13px; font-weight: 700; color: #fff; cursor: pointer;
+    background-image: linear-gradient(135deg, #1D4268, #0D2C4D), linear-gradient(135deg, var(--edge), var(--dim));
+    background-origin: border-box; background-clip: padding-box, border-box; box-shadow: 0 2px 4px var(--shadow);
+  }
+  .btn-save:hover {
+    background-image: linear-gradient(135deg, var(--gold-light), var(--gold-dark)), linear-gradient(135deg, var(--gold-border-light), var(--gold-border-dark));
+    color: var(--gold-text);
+  }
+
+  .jump-row { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; }
+  .jump-label { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .jump-input { width: 70px; background: rgba(255,255,255,0.04); border: 1px solid var(--edge); border-radius: 8px; color: var(--text); font-family: 'Quicksand', sans-serif; font-size: 14px; padding: 8px 10px; outline: none; text-align: center; }
+  .btn-jump { background: transparent; border: 1px solid var(--edge); border-radius: 8px; color: var(--muted); font-family: 'Quicksand', sans-serif; font-size: 13px; font-weight: 600; padding: 8px 14px; cursor: pointer; transition: all 0.15s; }
+  .btn-jump:hover { color: var(--blue); border-color: var(--blue); }
+
+  .nav-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+  .btn-nav { padding: 14px; border-radius: 12px; font-family: 'Quicksand', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; text-align: center; border: 1px solid var(--edge); background: transparent; color: var(--muted); }
+  .btn-nav:hover { border-color: var(--blue); color: var(--blue); }
+  .btn-nav.danger { border-color: var(--error); color: var(--error); }
+  .btn-nav.danger:hover { background: rgba(230,57,70,0.08); }
+
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px); background: rgba(0,168,255,0.12); border: 1px solid rgba(0,168,255,0.3); color: var(--blue); font-size: 13px; padding: 10px 20px; border-radius: 20px; backdrop-filter: blur(10px); transition: transform 0.3s ease; z-index: 200; white-space: nowrap; font-family: 'Quicksand', sans-serif; }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  .toast.warn { border-color: rgba(255,200,87,0.4); color: var(--warning); background: rgba(255,200,87,0.08); }
+  .toast.good { border-color: rgba(46,204,113,0.4); color: var(--success); background: rgba(46,204,113,0.08); }
+
+  .done-screen { display: none; text-align: center; padding: 40px 20px; }
+  .done-screen.show { display: block; }
+  .done-title { font-family: 'Quicksand', sans-serif; font-size: 24px; font-weight: 700; color: var(--success); text-shadow: 0 0 20px rgba(46,204,113,0.4); margin-bottom: 12px; }
+  .done-sub { color: var(--muted); font-size: 13px; line-height: 1.7; }
+
+  .divider { height: 1px; background: rgba(143,174,193,0.18); margin: 20px 0; }
+
+  /* Modal overlay */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(5,18,34,0.85); z-index: 500; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+  .modal-overlay.show { display: flex; }
+  .modal { border: 1px solid transparent; border-radius: 16px; padding: 32px 24px; max-width: 360px; width: 90%; text-align: center;
+    background-image: linear-gradient(135deg, var(--panel) 0%, var(--void) 100%), linear-gradient(135deg, var(--edge) 0%, var(--dim) 100%);
+    background-origin: border-box; background-clip: padding-box, border-box; box-shadow: 0 2px 4px var(--shadow); }
+  .modal-icon { color: var(--warning); margin-bottom: 16px; display: flex; justify-content: center; }
+  .modal-title { font-family: 'Quicksand', sans-serif; font-size: 15px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--gold-text); margin-bottom: 8px; }
+  .modal-msg { font-size: 12px; color: var(--muted); line-height: 1.7; margin-bottom: 8px; }
+  .modal-countdown { font-family: 'Quicksand', sans-serif; font-size: 36px; font-weight: 700; color: var(--warning); text-shadow: 0 0 20px rgba(255,200,87,0.4); margin: 16px 0; }
+  .modal-unsaved { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 12px; color: var(--error); margin-bottom: 24px; }
+  .modal-btn { width: 100%; padding: 14px; border-radius: 12px; font-family: 'Quicksand', sans-serif; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; margin-bottom: 10px; border: 1px solid; }
+  .modal-btn.extend { background: rgba(0,168,255,0.12); border-color: var(--blue); color: var(--blue); }
+  .modal-btn.extend:hover { background: rgba(0,168,255,0.22); }
+  .modal-btn.leave { background: rgba(230,57,70,0.08); border-color: var(--error); color: var(--error); }
+  .modal-btn.leave:hover { background: rgba(230,57,70,0.15); }
+
+  /* Confirm dialog */
+  .confirm-overlay { display: none; position: fixed; inset: 0; background: rgba(5,18,34,0.85); z-index: 600; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+  .confirm-overlay.show { display: flex; }
+  .confirm-box { border: 1px solid transparent; border-radius: 16px; padding: 28px 24px; max-width: 340px; width: 90%; text-align: center;
+    background-image: linear-gradient(135deg, var(--panel) 0%, var(--void) 100%), linear-gradient(135deg, var(--edge) 0%, var(--dim) 100%);
+    background-origin: border-box; background-clip: padding-box, border-box; box-shadow: 0 2px 4px var(--shadow); }
+  .confirm-title { display: flex; align-items: center; justify-content: center; gap: 6px; font-family: 'Quicksand', sans-serif; font-size: 14px; font-weight: 700; letter-spacing: 0.04em; color: var(--error); margin-bottom: 12px; }
+  .confirm-msg { font-size: 12px; color: var(--muted); line-height: 1.7; margin-bottom: 24px; }
+  .confirm-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .confirm-btn { padding: 12px; border-radius: 10px; font-family: 'Quicksand', sans-serif; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.2s; border: 1px solid; }
+  .confirm-btn.yes { background: rgba(230,57,70,0.1); border-color: var(--error); color: var(--error); }
+  .confirm-btn.yes:hover { background: rgba(230,57,70,0.2); }
+  .confirm-btn.cancel { background: transparent; border-color: var(--edge); color: var(--muted); }
+  .confirm-btn.cancel:hover { border-color: var(--blue); color: var(--blue); }
+
+  /* Save name dialog */
+  .save-overlay { display: none; position: fixed; inset: 0; background: rgba(5,18,34,0.85); z-index: 600; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+  .save-overlay.show { display: flex; }
+  .save-box { border: 1px solid transparent; border-radius: 16px; padding: 28px 24px; max-width: 340px; width: 90%; text-align: center;
+    background-image: linear-gradient(135deg, var(--panel) 0%, var(--void) 100%), linear-gradient(135deg, var(--edge) 0%, var(--dim) 100%);
+    background-origin: border-box; background-clip: padding-box, border-box; box-shadow: 0 2px 4px var(--shadow); }
+  .save-title { font-family: 'Quicksand', sans-serif; font-size: 14px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--gold-text); margin-bottom: 16px; }
+  .save-input { width: 100%; background: rgba(255,255,255,0.04); border: 1px solid var(--edge); border-radius: 10px; color: var(--text); font-family: 'Quicksand', sans-serif; font-size: 14px; padding: 12px 14px; outline: none; margin-bottom: 20px; text-align: center; }
+  .save-input:focus { border-color: var(--blue); }
+  .save-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .save-btn { padding: 12px; border-radius: 10px; font-family: 'Quicksand', sans-serif; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.2s; border: 1px solid transparent; }
+  .save-btn.confirm { color: #fff;
+    background-image: linear-gradient(135deg, #1D4268, #0D2C4D), linear-gradient(135deg, var(--edge), var(--dim));
+    background-origin: border-box; background-clip: padding-box, border-box; box-shadow: 0 2px 4px var(--shadow); }
+  .save-btn.confirm:hover {
+    background-image: linear-gradient(135deg, var(--gold-light), var(--gold-dark)), linear-gradient(135deg, var(--gold-border-light), var(--gold-border-dark));
+    color: var(--gold-text); }
+  .save-btn.cancel { background: transparent; border-color: var(--edge); color: var(--muted); }
+  .save-btn.cancel:hover { border-color: var(--blue); color: var(--blue); }
+</style>
+</head>
+<body>
+<div class="container">
+
+<div class="r2-avatar">
+    <svg class="r2-svg" id="r2Avatar" width="100%" height="100%" viewBox="0 0 1254 1254" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:serif="http://www.serif.com/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:1.5;">
+    <g id="logo_mobile" transform="matrix(-2.00944,-3.22438e-16,3.22438e-16,-2.00944,1081.39,1638.66)">
+        <path fill="#00a8ff" d="M145.093,284.896L145.093,339.137L129.603,365.344L129.469,365.344L129.469,470.347L96.848,525.539C92.01,525.49 87.513,528.025 85.051,532.19C81.248,538.624 83.385,546.935 89.819,550.738C96.253,554.541 104.564,552.405 108.367,545.971C110.829,541.806 110.881,536.644 108.505,532.429L142.865,474.297L143.011,474.297L143.011,369.273L158.297,343.41L158.635,343.41L158.635,272.691L175.669,257.339L224.672,197.089L234.589,196.431L234.589,318.141C230.399,320.56 227.818,325.031 227.818,329.869C227.818,337.343 233.886,343.41 241.36,343.41C248.834,343.41 254.902,337.343 254.902,329.869C254.902,325.031 252.32,320.56 248.131,318.141L248.131,196.55L290.089,249.61L290.089,318.141C285.899,320.56 283.318,325.031 283.318,329.869C283.318,337.343 289.386,343.41 296.86,343.41C304.334,343.41 310.402,337.343 310.402,329.869C310.402,325.031 307.821,320.56 303.631,318.141L303.631,279.493L306.309,285.856L320.167,314.575L381.621,675.266L368.366,729.39L342.453,746.589L342.453,681.572C346.643,679.153 349.224,674.682 349.224,669.844C349.224,662.37 343.156,656.302 335.682,656.302C328.208,656.302 322.14,662.37 322.14,669.844C322.14,674.682 324.722,679.153 328.911,681.572L328.911,755.577L301.883,773.515L301.883,553.93L301.735,553.93L302.067,553.597L268.709,520.239L270.236,511.93L270.648,507.444L319.802,556.598C318.55,561.271 319.886,566.257 323.307,569.678C328.592,574.963 337.173,574.963 342.458,569.678C347.743,564.393 347.743,555.812 342.458,550.527C339.037,547.106 334.051,545.77 329.378,547.022L272.262,489.906L273.618,475.162L274.522,449.411L273.819,443.886L240.868,422.321L227.775,414.217L222.484,409.295L212.974,411.84L180.192,433.598L173.24,394.172L219.727,299.123L207.562,293.174L159.139,392.182L188.313,557.638L191.309,575.219L195.93,584.796L200.651,596.014L211.836,610.158L202.765,620.804L76.795,577.121L83.488,504.36L118.533,313.671L136.005,293.086L145.093,284.896ZM232.864,810.478L232.864,744.093C237.054,741.674 239.635,737.203 239.635,732.365C239.635,724.891 233.567,718.823 226.093,718.823C218.619,718.823 212.551,724.891 212.551,732.365C212.551,737.203 215.132,741.674 219.322,744.093L219.322,805.286L210.815,797.371L195.84,788.103L195.84,676.003L195.527,676.003L154.619,634.284L144.95,643.765L182.298,681.853L182.298,779.721L171.552,773.071L133.255,748.006L108.548,709.495L108.548,648.866C112.738,646.447 115.319,641.977 115.319,637.139C115.319,629.665 109.251,623.597 101.777,623.597C94.304,623.597 88.236,629.665 88.236,637.139C88.236,641.977 90.817,646.447 95.007,648.866L95.007,709.495L109.912,732.729L72.744,708.403L70.635,691.835L73.346,614.616L75.518,591.011L207.072,636.63L258.67,576.069L258.33,575.779L258.549,575.521L265.736,536.417L288.341,559.022L288.341,782.503L255.198,804.501L232.864,810.478ZM267.751,733.141L267.751,658.582L254.209,658.582L254.209,733.141C250.019,735.56 247.438,740.031 247.438,744.869C247.438,752.343 253.506,758.411 260.98,758.411C268.454,758.411 274.522,752.343 274.522,744.869C274.522,740.031 271.941,735.56 267.751,733.141ZM150.502,526.265L150.502,587.279L164.044,587.279L164.044,526.265C168.234,523.846 170.815,519.375 170.815,514.537C170.815,507.063 164.747,500.995 157.273,500.995C149.799,500.995 143.731,507.063 143.731,514.537C143.731,519.375 146.312,523.846 150.502,526.265ZM275.214,342.696L275.214,303.476C279.404,301.057 281.985,296.586 281.985,291.748C281.985,284.274 275.917,278.207 268.443,278.207C260.969,278.207 254.902,284.274 254.902,291.748C254.902,296.586 257.483,301.057 261.672,303.476L261.672,342.696L291.423,389.068L291.423,449.697C287.233,452.116 284.652,456.587 284.652,461.425C284.652,468.899 290.72,474.967 298.193,474.967C305.667,474.967 311.735,468.899 311.735,461.425C311.735,456.587 309.154,452.116 304.964,449.697L304.964,389.068L275.214,342.696Z"/>
+    </g>
+</svg>
+  </div>
+
+  <div class="header">
+    <div class="header-title">Acoustic Package</div>
+    <div class="header-sub">Emotion Discovery · Sound Mapping</div>
+  </div>
+
+  <div class="sound-profile-badge" id="soundProfileBadge">Sound Profile 1</div>
+  <div class="progress-panel">
+    <div class="progress-row">
+      <div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">SOUND ID</div>
+        <div class="sound-id" id="soundId">--</div>
+        <div style="font-size:11px;color:var(--warning);margin-top:2px;" id="bankName"></div>
+      </div>
+      <div class="progress-stats">
+        <div id="progressFrac">0 / 0</div>
+        <div id="labeledCount" style="color:var(--success)">0 labeled</div>
+        <div id="skippedCount" style="color:var(--warning)">0 skipped</div>
+      </div>
+    </div>
+    <div class="progress-bar-track">
+      <div class="progress-bar-fill" id="progressBar" style="width:0%"></div>
+    </div>
+    <div class="progress-label">
+      <span>SOUND 0</span>
+      <span id="progressPct">0%</span>
+      <span id="soundMax">SOUND 28</span>
+    </div>
+    <div class="current-labels" id="currentLabels">
+      <div class="current-labels-title">CURRENT LABELS FOR THIS SOUND</div>
+      <span style="font-size:11px;color:var(--muted)">none yet</span>
+    </div>
+  </div>
+
+  <div class="section-title">PLAYBACK</div>
+  <div class="transport">
+    <button class="btn btn-back" onclick="doBack()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>BACK
+    </button>
+    <button class="btn btn-play" id="playBtn" onclick="doPlay()">
+      <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>PLAY
+    </button>
+    <button class="btn btn-next" onclick="doNext()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>NEXT
+    </button>
+    <button class="btn btn-skip" onclick="doSkip()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="8" y1="8" x2="16" y2="16"/></svg>SKIP
+    </button>
+    <button class="btn btn-stop" onclick="doStop()">
+      <svg viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>STOP
+    </button>
+  </div>
+
+  <div class="jump-row">
+    <span class="jump-label">JUMP TO SOUND:</span>
+    <input class="jump-input" id="jumpInput" type="number" min="0" max="28" value="0"/>
+    <button class="btn-jump" onclick="doJump()">GO</button>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="section-title">ASSIGN EMOTION(S)</div>
+  <div class="emotion-grid" id="emotionGrid">
+    <button class="emotion-btn" data-emotion="happy"     onclick="toggleEmotion(this)"><span class="emoji"><i class="ti ti-mood-smile" aria-hidden="true"></i></span>Happy</button>
+    <button class="emotion-btn" data-emotion="excited"   onclick="toggleEmotion(this)"><span class="emoji"><i class="ti ti-sparkles" aria-hidden="true"></i></span>Excited</button>
+    <button class="emotion-btn" data-emotion="sad"       onclick="toggleEmotion(this)"><span class="emoji"><i class="ti ti-mood-sad" aria-hidden="true"></i></span>Sad</button>
+    <button class="emotion-btn" data-emotion="scared"    onclick="toggleEmotion(this)"><span class="emoji"><i class="ti ti-ghost-2" aria-hidden="true"></i></span>Scared</button>
+    <button class="emotion-btn" data-emotion="angry"     onclick="toggleEmotion(this)"><span class="emoji"><i class="ti ti-mood-angry" aria-hidden="true"></i></span>Angry</button>
+    <button class="emotion-btn" data-emotion="confused"  onclick="toggleEmotion(this)"><span class="emoji"><i class="ti ti-mood-confuzed" aria-hidden="true"></i></span>Confused</button>
+    <button class="emotion-btn" data-emotion="disgusted" onclick="toggleEmotion(this)"><span class="emoji"><i class="ti ti-mood-sick" aria-hidden="true"></i></span>Disgusted</button>
+    <button class="emotion-btn" data-emotion="curious"   onclick="toggleEmotion(this)"><span class="emoji"><i class="ti ti-help" aria-hidden="true"></i></span>Curious</button>
+    <button class="emotion-btn" data-emotion="defensive" onclick="toggleEmotion(this)"><span class="emoji"><i class="ti ti-shield" aria-hidden="true"></i></span>Defensive</button>
+    <button class="emotion-btn" data-emotion="neutral"   onclick="toggleEmotion(this)"><span class="emoji"><i class="ti ti-mood-neutral" aria-hidden="true"></i></span>Neutral</button>
+    <button class="emotion-btn" data-emotion="start up"  onclick="toggleEmotion(this)"><span class="emoji"><i class="ti ti-bolt" aria-hidden="true"></i></span>Start Up</button>
+    <button class="emotion-btn" data-emotion="blaster"   onclick="toggleEmotion(this)"><span class="emoji"><i class="ti ti-target" aria-hidden="true"></i></span>Blaster</button>
+  </div>
+
+  <div class="custom-row">
+    <input class="custom-input" id="customInput" type="text" placeholder="custom emotion..."
+      onkeydown="if(event.key==='Enter') addCustomEmotion()"/>
+    <button class="btn-add-custom" onclick="addCustomEmotion()">+ ADD</button>
+  </div>
+
+  <button class="btn-confirm" id="confirmBtn" onclick="doLabel()" disabled>
+    ▸ SAVE LABELS &amp; NEXT SOUND
+  </button>
+
+  <div class="divider"></div>
+
+  <div class="section-title">SESSION STATS</div>
+  <div class="export-panel">
+    <div class="export-stats">
+      <div class="stat-box"><div class="stat-num" id="statTotal">0</div><div class="stat-label">TOTAL</div></div>
+      <div class="stat-box"><div class="stat-num green" id="statLabeled">0</div><div class="stat-label">LABELED</div></div>
+      <div class="stat-box"><div class="stat-num orange" id="statSkipped">0</div><div class="stat-label">SKIPPED</div></div>
+    </div>
+    <button class="btn-save" onclick="doSave()"><i class="ti ti-device-floppy" aria-hidden="true"></i> SAVE SOUND PROFILE</button>
+  </div>
+
+  <div class="done-screen" id="doneScreen">
+    <div class="done-title">✓ DISCOVERY COMPLETE</div>
+    <div class="done-sub">All sounds reviewed.<br>Remember to save your sound profile before leaving.</div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="section-title">NAVIGATION</div>
+  <div class="nav-row">
+    <button class="btn-nav danger" onclick="confirmClose()">&#8592; Return to Droid Settings</button>
+  </div>
+
+</div>
+
+<!-- Timeout warning modal -->
+<div class="modal-overlay" id="timeoutModal">
+  <div class="modal">
+    <div class="modal-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+    <div class="modal-title">SESSION EXPIRING</div>
+    <div class="modal-msg">Your sound mapping session is about to end.</div>
+    <div class="modal-countdown" id="modalCountdown">60</div>
+    <div class="modal-unsaved"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>You will lose unsaved changes</div>
+    <button class="modal-btn leave" onclick="doModalClose()">Return to Droid Settings</button>
+    <button class="modal-btn extend" onclick="extendSession()">Extend My Session</button>
+  </div>
+</div>
+
+<!-- Confirm leave dialog -->
+<div class="confirm-overlay" id="confirmOverlay">
+  <div class="confirm-box">
+    <div class="confirm-title"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Unsaved Changes</div>
+    <div class="confirm-msg">You will lose any unsaved changes to your sound profile.<br><br>Are you sure you want to leave?</div>
+    <div class="confirm-btns">
+      <button class="confirm-btn yes" id="confirmYesBtn" onclick="confirmYes()">Yes, Leave</button>
+      <button class="confirm-btn cancel" onclick="confirmCancel()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Save name dialog -->
+<div class="save-overlay" id="saveOverlay">
+  <div class="save-box">
+    <div class="save-title">SAVE SOUND PROFILE</div>
+    <input class="save-input" id="saveNameInput" type="text" placeholder="Name this sound profile"
+      onkeydown="if(event.key==='Enter') confirmSaveName()"/>
+    <div class="save-btns">
+      <button class="save-btn confirm" onclick="confirmSaveName()">Save</button>
+      <button class="save-btn cancel" onclick="cancelSaveName()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  let selectedEmotions = new Set();
+  let state = { current: null, current_index: 0, total: 28, labeled: 0, skipped: 0, done: false, sound_profile: 1, name: '', timeout_remaining: 600 };
+  const TIMEOUT_TOTAL = 600;
+  let timeoutModalShown = false;
+  let modalCountdownInterval = null;
+  let pendingAction = null; // 'close' or 'settings'
+
+  async function fetchStatus() {
+    try {
+      const res = await fetch('/api/status');
+      state = await res.json();
+      renderState();
+      checkTimeout(state.timeout_remaining);
+    } catch(e) {
+      showToast('Cannot reach server', 'warn');
+    }
+  }
+
+  function checkTimeout(remaining) {
+    if (remaining <= 60 && !timeoutModalShown) {
+      timeoutModalShown = true;
+      showTimeoutModal(remaining);
+    }
+    if (remaining <= 0) {
+      // Time's up — redirect to Droid Settings
+      redirectToDroidSettings();
+    }
+  }
+
+  function showTimeoutModal(startSeconds) {
+    document.getElementById('timeoutModal').classList.add('show');
+    let count = startSeconds;
+    document.getElementById('modalCountdown').textContent = count;
+    modalCountdownInterval = setInterval(() => {
+      count--;
+      document.getElementById('modalCountdown').textContent = Math.max(0, count);
+      if (count <= 0) {
+        clearInterval(modalCountdownInterval);
+        redirectToDroidSettings();
+      }
+    }, 1000);
+  }
+
+  function hideTimeoutModal() {
+    document.getElementById('timeoutModal').classList.remove('show');
+    if (modalCountdownInterval) {
+      clearInterval(modalCountdownInterval);
+      modalCountdownInterval = null;
+    }
+  }
+
+  async function extendSession() {
+    hideTimeoutModal();
+    timeoutModalShown = false;
+    try {
+      await fetch('/api/extend', { method: 'POST' });
+      showToast('Session extended by 10 minutes', 'good');
+    } catch(e) {}
+  }
+
+  async function doModalClose() {
+    hideTimeoutModal();
+    redirectToDroidSettings();
+  }
+
+  function redirectToDroidSettings(query) {
+    fetch('/api/shutdown', { method: 'POST' }).catch(() => {});
+    setTimeout(() => {
+      window.location.href = `http://${location.hostname}:5001${query || ''}`;
+    }, 500);
+  }
+
+  // "Return to Droid Settings" nav button — confirm first
+  function confirmClose() {
+    pendingAction = 'close';
+    document.getElementById('confirmOverlay').classList.add('show');
+  }
+
+  function confirmYes() {
+    document.getElementById('confirmOverlay').classList.remove('show');
+    if (pendingAction === 'close') {
+      redirectToDroidSettings();
+    }
+    pendingAction = null;
+  }
+
+  function confirmCancel() {
+    document.getElementById('confirmOverlay').classList.remove('show');
+    pendingAction = null;
+  }
+
+  function renderState() {
+    const current = state.current;
+    if (current) {
+      document.getElementById('soundId').textContent = `${current.sound_id}`;
+      document.getElementById('bankName').textContent = current.bank_name;
+    } else {
+      document.getElementById('soundId').textContent = '--';
+      document.getElementById('bankName').textContent = '';
+    }
+
+    document.getElementById('soundProfileBadge').textContent = state.name || `Sound Profile ${state.sound_profile}`;
+    document.getElementById('progressFrac').textContent = `${state.current_index + 1} / ${state.total}`;
+    document.getElementById('labeledCount').textContent = `${state.labeled} labeled`;
+    document.getElementById('skippedCount').textContent = `${state.skipped} skipped`;
+    document.getElementById('soundMax').textContent = `SOUND ${state.total}`;
+
+    const pct = state.total > 0 ? Math.round((state.current_index / state.total) * 100) : 0;
+    document.getElementById('progressBar').style.width = pct + '%';
+    document.getElementById('progressPct').textContent = pct + '%';
+
+    document.getElementById('statTotal').textContent = state.total;
+    document.getElementById('statLabeled').textContent = state.labeled;
+    document.getElementById('statSkipped').textContent = state.skipped;
+
+    renderCurrentLabels(state.current_labels || []);
+
+    // Only reset emotion selections if the user hasn't made any yet
+    if (selectedEmotions.size === 0) {
+      document.querySelectorAll('.emotion-btn').forEach(b => b.classList.remove('selected'));
+      if (state.current_labels) {
+        state.current_labels.forEach(e => {
+          selectedEmotions.add(e);
+          const btn = document.querySelector(`.emotion-btn[data-emotion="${e}"]`);
+          if (btn) btn.classList.add('selected');
+        });
+      }
+      updateConfirmBtn();
+    }
+    if (state.done) document.getElementById('doneScreen').classList.add('show');
+  }
+
+  function renderCurrentLabels(existing) {
+    const container = document.getElementById('currentLabels');
+    container.innerHTML = '<div class="current-labels-title">CURRENT LABELS FOR THIS SOUND</div>';
+    if (!existing || existing.length === 0) {
+      container.innerHTML += '<span style="font-size:11px;color:var(--muted)">none yet</span>';
+    } else {
+      existing.forEach(e => {
+        const badge = document.createElement('span');
+        badge.className = 'label-badge';
+        badge.textContent = e;
+        container.appendChild(badge);
+      });
+    }
+  }
+
+  async function doPlay() {
+    setR2Playing(true);
+    const res = await fetch('/api/play', { method: 'POST' });
+    const data = await res.json();
+    setTimeout(() => setR2Playing(false), 2000);
+    showToast(data.playing || 'Playing...');
+  }
+
+  async function doNext() {
+    if (document.querySelector('.btn-next')?.disabled) return;
+    clearSelections();
+    await fetch('/api/next', { method: 'POST' });
+    await fetchStatus();
+  }
+
+  async function doBack() {
+    if (document.querySelector('.btn-back')?.disabled) return;
+    clearSelections();
+    await fetch('/api/back', { method: 'POST' });
+    await fetchStatus();
+  }
+
+  async function doSkip() {
+    clearSelections();
+    await fetch('/api/skip', { method: 'POST' });
+    setR2Playing(true);
+    setTimeout(() => setR2Playing(false), 2000);
+    showToast('Sound skipped', 'warn');
+    await fetchStatus();
+  }
+
+  function doStop() { setR2Playing(false); showToast('Stopped'); }
+
+  async function doJump() {
+    const idx = parseInt(document.getElementById('jumpInput').value);
+    if (isNaN(idx)) return;
+    clearSelections();
+    await fetch('/api/jump', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ index: idx }) });
+    setR2Playing(true);
+    setTimeout(() => setR2Playing(false), 2000);
+    await fetchStatus();
+  }
+
+  function toggleEmotion(btn) {
+    const e = btn.dataset.emotion;
+    if (selectedEmotions.has(e)) { selectedEmotions.delete(e); btn.classList.remove('selected'); }
+    else { selectedEmotions.add(e); btn.classList.add('selected'); }
+    updateConfirmBtn();
+  }
+
+  function addCustomEmotion() {
+    const input = document.getElementById('customInput');
+    const val = input.value.trim().toLowerCase();
+    if (!val) return;
+    const existing = document.querySelector(`.emotion-btn[data-emotion="${val}"]`);
+    if (existing) { existing.classList.add('selected'); selectedEmotions.add(val); }
+    else {
+      const grid = document.getElementById('emotionGrid');
+      const btn = document.createElement('button');
+      btn.className = 'emotion-btn selected';
+      btn.dataset.emotion = val;
+      btn.innerHTML = `<span class="emoji"><i class="ti ti-star" aria-hidden="true"></i></span>${val}`;
+      btn.onclick = function() { toggleEmotion(this); };
+      grid.appendChild(btn);
+      selectedEmotions.add(val);
+    }
+    input.value = '';
+    updateConfirmBtn();
+    showToast(`Added: ${val}`, 'good');
+  }
+
+  function updateConfirmBtn() { document.getElementById('confirmBtn').disabled = selectedEmotions.size === 0; }
+
+  async function doLabel() {
+    if (selectedEmotions.size === 0) return;
+    const emotions = Array.from(selectedEmotions);
+    await fetch('/api/label', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ emotions }) });
+    showToast(`Saved: ${emotions.join(', ')}`, 'good');
+    clearSelections();
+    setR2Playing(true);
+    setTimeout(() => setR2Playing(false), 2000);
+    await fetchStatus();
+  }
+
+  function clearSelections() {
+    selectedEmotions.clear();
+    document.querySelectorAll('.emotion-btn').forEach(b => b.classList.remove('selected'));
+    updateConfirmBtn();
+  }
+
+  function doSave() {
+    document.getElementById('saveNameInput').value = state.name || `Sound Profile ${state.sound_profile}`;
+    document.getElementById('saveOverlay').classList.add('show');
+  }
+
+  function cancelSaveName() {
+    document.getElementById('saveOverlay').classList.remove('show');
+  }
+
+  async function confirmSaveName() {
+    const name = document.getElementById('saveNameInput').value.trim();
+    document.getElementById('saveOverlay').classList.remove('show');
+    await fetch('/api/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name })
+    });
+    redirectToDroidSettings('/?restarting=1');
+  }
+
+  let playLockTimer = null;
+
+  function setR2Playing(active) {
+    document.getElementById('r2Avatar').classList.toggle('playing', active);
+    document.getElementById('playBtn').classList.toggle('active', active);
+    const backBtn = document.querySelector('.btn-back');
+    const nextBtn = document.querySelector('.btn-next');
+    if (active) {
+      if (backBtn) backBtn.disabled = true;
+      if (nextBtn) nextBtn.disabled = true;
+      if (playLockTimer) clearTimeout(playLockTimer);
+      playLockTimer = setTimeout(() => {
+        if (backBtn) backBtn.disabled = false;
+        if (nextBtn) nextBtn.disabled = false;
+        playLockTimer = null;
+      }, 3000);
+    } else {
+      if (playLockTimer) { clearTimeout(playLockTimer); playLockTimer = null; }
+      if (backBtn) backBtn.disabled = false;
+      if (nextBtn) nextBtn.disabled = false;
+    }
+  }
+
+  let toastTimer;
+  function showToast(msg, type = '') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = `toast ${type} show`;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
+  }
+
+  // Poll every 5 seconds
+  fetchStatus();
+  setInterval(fetchStatus, 5000);
+</script>
+</body>
+</html>

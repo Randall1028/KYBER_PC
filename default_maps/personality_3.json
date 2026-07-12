@@ -1,0 +1,10 @@
+{
+  "name": "Personality 3",
+  "traits": {
+    "brave": 3,
+    "curious": 3,
+    "sassy": 3,
+    "playful": 3,
+    "sensitive": 3
+  }
+}

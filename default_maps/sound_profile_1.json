@@ -1,0 +1,376 @@
+{
+  "sound_profile": 1,
+  "current_index": 0,
+  "emotion_to_sounds": {
+    "confused": [
+      {
+        "bank_id": 1,
+        "sound_id": 1
+      },
+      {
+        "bank_id": 1,
+        "sound_id": 3
+      },
+      {
+        "bank_id": 1,
+        "sound_id": 4
+      },
+      {
+        "bank_id": 2,
+        "sound_id": 4
+      },
+      {
+        "bank_id": 3,
+        "sound_id": 3
+      },
+      {
+        "bank_id": 4,
+        "sound_id": 1
+      }
+    ],
+    "curious": [
+      {
+        "bank_id": 1,
+        "sound_id": 1
+      },
+      {
+        "bank_id": 2,
+        "sound_id": 4
+      },
+      {
+        "bank_id": 4,
+        "sound_id": 1
+      },
+      {
+        "bank_id": 6,
+        "sound_id": 1
+      },
+      {
+        "bank_id": 6,
+        "sound_id": 4
+      }
+    ],
+    "neutral": [
+      {
+        "bank_id": 1,
+        "sound_id": 1
+      },
+      {
+        "bank_id": 2,
+        "sound_id": 4
+      },
+      {
+        "bank_id": 3,
+        "sound_id": 2
+      },
+      {
+        "bank_id": 3,
+        "sound_id": 3
+      },
+      {
+        "bank_id": 6,
+        "sound_id": 4
+      }
+    ],
+    "angry": [
+      {
+        "bank_id": 1,
+        "sound_id": 2
+      },
+      {
+        "bank_id": 1,
+        "sound_id": 3
+      },
+      {
+        "bank_id": 2,
+        "sound_id": 1
+      },
+      {
+        "bank_id": 2,
+        "sound_id": 2
+      },
+      {
+        "bank_id": 2,
+        "sound_id": 3
+      },
+      {
+        "bank_id": 9,
+        "sound_id": 1
+      }
+    ],
+    "disgusted": [
+      {
+        "bank_id": 1,
+        "sound_id": 2
+      },
+      {
+        "bank_id": 2,
+        "sound_id": 1
+      },
+      {
+        "bank_id": 2,
+        "sound_id": 2
+      },
+      {
+        "bank_id": 2,
+        "sound_id": 3
+      }
+    ],
+    "sad": [
+      {
+        "bank_id": 1,
+        "sound_id": 3
+      },
+      {
+        "bank_id": 1,
+        "sound_id": 4
+      },
+      {
+        "bank_id": 7,
+        "sound_id": 1
+      },
+      {
+        "bank_id": 7,
+        "sound_id": 2
+      },
+      {
+        "bank_id": 7,
+        "sound_id": 3
+      },
+      {
+        "bank_id": 7,
+        "sound_id": 4
+      },
+      {
+        "bank_id": 7,
+        "sound_id": 5
+      }
+    ],
+    "defensive": [
+      {
+        "bank_id": 1,
+        "sound_id": 3
+      },
+      {
+        "bank_id": 1,
+        "sound_id": 4
+      },
+      {
+        "bank_id": 3,
+        "sound_id": 3
+      },
+      {
+        "bank_id": 4,
+        "sound_id": 1
+      },
+      {
+        "bank_id": 7,
+        "sound_id": 1
+      },
+      {
+        "bank_id": 7,
+        "sound_id": 2
+      },
+      {
+        "bank_id": 7,
+        "sound_id": 3
+      },
+      {
+        "bank_id": 7,
+        "sound_id": 4
+      }
+    ],
+    "scared": [
+      {
+        "bank_id": 1,
+        "sound_id": 4
+      },
+      {
+        "bank_id": 4,
+        "sound_id": 1
+      },
+      {
+        "bank_id": 5,
+        "sound_id": 1
+      },
+      {
+        "bank_id": 7,
+        "sound_id": 1
+      },
+      {
+        "bank_id": 7,
+        "sound_id": 3
+      },
+      {
+        "bank_id": 7,
+        "sound_id": 4
+      }
+    ],
+    "happy": [
+      {
+        "bank_id": 3,
+        "sound_id": 1
+      },
+      {
+        "bank_id": 3,
+        "sound_id": 2
+      },
+      {
+        "bank_id": 3,
+        "sound_id": 3
+      },
+      {
+        "bank_id": 6,
+        "sound_id": 1
+      },
+      {
+        "bank_id": 6,
+        "sound_id": 2
+      },
+      {
+        "bank_id": 6,
+        "sound_id": 3
+      },
+      {
+        "bank_id": 6,
+        "sound_id": 4
+      }
+    ],
+    "excited": [
+      {
+        "bank_id": 3,
+        "sound_id": 1
+      },
+      {
+        "bank_id": 3,
+        "sound_id": 2
+      },
+      {
+        "bank_id": 6,
+        "sound_id": 1
+      },
+      {
+        "bank_id": 6,
+        "sound_id": 2
+      },
+      {
+        "bank_id": 6,
+        "sound_id": 3
+      }
+    ]
+  },
+  "sound_to_emotions": {
+    "1_1": [
+      "confused",
+      "curious",
+      "neutral"
+    ],
+    "1_3": [
+      "confused",
+      "angry",
+      "sad",
+      "defensive"
+    ],
+    "1_4": [
+      "confused",
+      "sad",
+      "defensive",
+      "scared"
+    ],
+    "2_4": [
+      "confused",
+      "curious",
+      "neutral"
+    ],
+    "3_3": [
+      "confused",
+      "neutral",
+      "defensive",
+      "happy"
+    ],
+    "4_1": [
+      "confused",
+      "curious",
+      "defensive",
+      "scared"
+    ],
+    "6_1": [
+      "curious",
+      "happy",
+      "excited"
+    ],
+    "6_4": [
+      "curious",
+      "neutral",
+      "happy"
+    ],
+    "3_2": [
+      "neutral",
+      "happy",
+      "excited"
+    ],
+    "1_2": [
+      "angry",
+      "disgusted"
+    ],
+    "2_1": [
+      "angry",
+      "disgusted"
+    ],
+    "2_2": [
+      "angry",
+      "disgusted"
+    ],
+    "2_3": [
+      "angry",
+      "disgusted"
+    ],
+    "9_1": [
+      "angry"
+    ],
+    "7_1": [
+      "sad",
+      "defensive",
+      "scared"
+    ],
+    "7_2": [
+      "sad",
+      "defensive"
+    ],
+    "7_3": [
+      "sad",
+      "defensive",
+      "scared"
+    ],
+    "7_4": [
+      "sad",
+      "defensive",
+      "scared"
+    ],
+    "7_5": [
+      "sad"
+    ],
+    "5_1": [
+      "scared"
+    ],
+    "3_1": [
+      "happy",
+      "excited"
+    ],
+    "6_2": [
+      "happy",
+      "excited"
+    ],
+    "6_3": [
+      "happy",
+      "excited"
+    ]
+  },
+  "skipped": [],
+  "stats": {
+    "total": 28,
+    "labeled": 23,
+    "skipped": 0
+  },
+  "name": "Default"
+}
