@@ -83,9 +83,43 @@ Filename: "{app}\{#MyAppExeName}"; Description: "Launch KYBER"; Flags: nowait po
 ; Filename: "{tmp}\MicrosoftEdgeWebview2Setup.exe"; Parameters: "/silent /install"; Flags: waituntilterminated
 ; ----------------------------------------------------------------------------
 
-[UninstallDelete]
-; The app's data (runtime, models, settings) lives in %LocalAppData%\KYBER and
-; is deliberately LEFT IN PLACE on uninstall, so a reinstall doesn't re-download
-; ~5 GB and keeps the user's tuned personalities/sound profiles. To make
-; uninstall wipe it too, uncomment the next line.
-; Type: filesandordirs; Name: "{localappdata}\KYBER"
+; ----------------------------------------------------------------------------
+; Uninstall cleanup is handled in [Code] below (CurUninstallStepChanged): we
+; stop KYBER + Ollama first so nothing holds the runtime files locked, then ASK
+; whether to also remove the several-GB of downloaded models/settings under
+; %LocalAppData%\KYBER (default Yes -- if you're uninstalling, it's gone gone).
+; ----------------------------------------------------------------------------
+
+[Code]
+procedure KillProc(const ExeName: String);
+var
+  ResultCode: Integer;
+begin
+  { /F force, /T whole tree -- loading a model spawns a llama-server.exe child
+    that locks the runtime DLLs, so the tree has to go, not just the parent. }
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM ' + ExeName + ' /T',
+       '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  DataDir: String;
+begin
+  if CurUninstallStep = usUninstall then
+  begin
+    { Stop KYBER and its Ollama/llama-server children so the runtime files
+      aren't locked while we (optionally) delete them. }
+    KillProc('KYBER.exe');
+    KillProc('ollama.exe');
+    KillProc('llama-server.exe');
+
+    DataDir := ExpandConstant('{localappdata}\KYBER');
+    if DirExists(DataDir) then
+    begin
+      if MsgBox('Also remove KYBER''s downloaded AI models and settings (several GB)?' + #13#10 +
+                'Choose No only if you plan to reinstall and want to keep them.',
+                mbConfirmation, MB_YESNO or MB_DEFBUTTON1) = IDYES then
+        DelTree(DataDir, True, True, True);
+    end;
+  end;
+end;

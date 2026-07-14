@@ -34,6 +34,7 @@ import asyncio
 import json
 import os
 import time
+import traceback
 
 from bleak import BleakScanner
 from droiddepot.connection import DroidConnection
@@ -44,6 +45,12 @@ from config import PROJECT_DIR
 
 RESULT_PATH = os.path.join(PROJECT_DIR, "activation_result.json")
 DISCOVERY_TIMEOUT_SECONDS = 20
+# Same flaky-BLE hardening as claim_connect_worker: bound each connect and
+# retry, and catch CancelledError (a BaseException that "except Exception"
+# misses) so a cancelled connect writes a result instead of freezing the page.
+CONNECT_TIMEOUT_SECONDS = 20
+CONNECT_ATTEMPTS = 3
+RETRY_PAUSE_SECONDS = 2
 
 
 def write_result(status: str, error: str = ""):
@@ -72,24 +79,49 @@ async def discover_and_connect():
 async def main():
     write_result("activating")
 
-    try:
-        droid = await discover_and_connect()
-        if droid is None:
-            write_result("failed", error="Droid not found on reconnect")
-            return
-
-        await droid.connect()
-
+    last_error = "Could not connect to the droid to activate it"
+    for attempt in range(1, CONNECT_ATTEMPTS + 1):
+        droid = None
         try:
-            await DroidScriptEngine(droid).execute_script(DroidScripts.DroidBayActivationSequence)
-            write_result("done")
+            print(f"[{time.strftime('%H:%M:%S')}] [ACTIVATION] Connect attempt {attempt}/{CONNECT_ATTEMPTS}...", flush=True)
+            droid = await discover_and_connect()
+            if droid is None:
+                last_error = "Droid not found on reconnect"
+                print(f"[{time.strftime('%H:%M:%S')}] [ACTIVATION] {last_error}", flush=True)
+            else:
+                await asyncio.wait_for(droid.connect(), timeout=CONNECT_TIMEOUT_SECONDS)
+                try:
+                    await DroidScriptEngine(droid).execute_script(DroidScripts.DroidBayActivationSequence)
+                    write_result("done")
+                    try:
+                        await droid.disconnect()
+                    except Exception:
+                        pass
+                    return
+                except Exception as e:
+                    last_error = f"Activation script failed: {e}"
+                    print(f"[{time.strftime('%H:%M:%S')}] [ACTIVATION] {last_error}", flush=True)
+        except asyncio.TimeoutError:
+            last_error = "Connection timed out"
+            print(f"[{time.strftime('%H:%M:%S')}] [ACTIVATION] Attempt {attempt} timed out after {CONNECT_TIMEOUT_SECONDS}s", flush=True)
+        except asyncio.CancelledError:
+            last_error = "Connection was cancelled"
+            print(f"[{time.strftime('%H:%M:%S')}] [ACTIVATION] Attempt {attempt} cancelled", flush=True)
         except Exception as e:
-            write_result("failed", error=f"Activation script failed: {e}")
-        finally:
-            await droid.disconnect()
+            last_error = str(e)
+            print(f"[{time.strftime('%H:%M:%S')}] [ACTIVATION] Attempt {attempt} error:", flush=True)
+            traceback.print_exc()
 
-    except Exception as e:
-        write_result("failed", error=str(e))
+        if droid is not None:
+            try:
+                await droid.disconnect()
+            except Exception:
+                pass
+        if attempt < CONNECT_ATTEMPTS:
+            await asyncio.sleep(RETRY_PAUSE_SECONDS)
+
+    print(f"[{time.strftime('%H:%M:%S')}] [ACTIVATION] All {CONNECT_ATTEMPTS} attempts failed: {last_error}", flush=True)
+    write_result("failed", error=last_error)
 
 
 if __name__ == "__main__":

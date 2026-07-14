@@ -23,7 +23,6 @@ from PyInstaller.utils.hooks import (
 datas = [
     ("sound_discovery_ui.html", "."),
     ("kyber_provision_page.html", "."),
-    ("env.example", "."),
     ("VERSION", "."),                          # single-source app version
     ("default_maps/*.json", "default_maps"),   # seed personalities on first run
 ]

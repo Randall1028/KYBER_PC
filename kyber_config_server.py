@@ -3371,17 +3371,17 @@ class MainframeHandler(BaseHTTPRequestHandler):
             if os.path.exists(CLAIM_CONNECT_RESULT_PATH):
                 os.remove(CLAIM_CONNECT_RESULT_PATH)
 
-            # subprocess.run, not Popen -- this specific connect step has
-            # been fast in testing so far (a few seconds), so blocking this
-            # one request thread until it finishes is simpler than building
-            # a second poll loop just for this. ThreadingHTTPServer handles
-            # each request on its own thread, so this doesn't block anything
-            # else. 25s ceiling matches the worker's own 15s scan window
-            # plus room for the connect step itself.
+            # subprocess.run, not Popen -- blocking this one request thread
+            # until the worker finishes is simpler than a second poll loop.
+            # ThreadingHTTPServer handles each request on its own thread, so
+            # this doesn't block anything else. The worker now RETRIES the
+            # connect to survive flaky Bluetooth (worst case ~50s), so this
+            # ceiling MUST stay above the worker's own budget -- see
+            # CONNECT_ATTEMPTS/CONNECT_TIMEOUT_SECONDS in claim_connect_worker.py.
             try:
                 subprocess.run(
                     relaunch_command("claim_connect", mac),
-                    cwd=PROJECT_DIR, timeout=25,
+                    cwd=PROJECT_DIR, timeout=60,
                 )
             except subprocess.TimeoutExpired:
                 pass

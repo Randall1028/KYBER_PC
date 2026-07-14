@@ -25,9 +25,9 @@ Design notes:
   - Runs in a background thread inside the Mainframe (kyber_config_server)
     process. status() is a plain dict the /setup/provision_status route returns.
 
-The model tags MUST stay in sync with kyber_core.py:
-    OLLAMA_MODEL       == kyber_core.OLLAMA_MODEL
-    WHISPER_MODEL_SIZE == kyber_core.WHISPER_MODEL_SIZE  ("small" -> the repo below)
+The Ollama model is tier-driven via config.active_ollama_model() (shared with
+kyber_core.py so the two can't drift). Whisper stays "small" on every tier (the
+repo below). The tier is auto-detected once on first run (config.ensure_tier).
 """
 
 import glob
@@ -41,14 +41,15 @@ import zipfile
 
 import requests
 
-from config import PROJECT_DIR, update_env_values
+from config import PROJECT_DIR, update_env_values, active_ollama_model, ensure_tier
 
 # ---------------------------------------------------------------------------
-# What we install (keep in sync with kyber_core.py)
+# What we install. The Ollama MODEL is tier-driven -- it comes from
+# config.active_ollama_model() (4B on capable PCs, 1.5B on weak ones), so there
+# is no hardcoded tag here to fall out of sync with kyber_core.py.
 # ---------------------------------------------------------------------------
 
-OLLAMA_MODEL = "qwen3:4b-instruct-2507-q4_K_M"     # == kyber_core.OLLAMA_MODEL
-WHISPER_REPO = "Systran/faster-whisper-small"      # faster-whisper "small"
+WHISPER_REPO = "Systran/faster-whisper-small"      # faster-whisper "small" (all tiers)
 OLLAMA_HOST = "127.0.0.1:11434"                    # == kyber_core's Ollama host
 
 # Pinned for reproducible beta installs -- every tester gets this exact runtime.
@@ -294,9 +295,10 @@ def _pull_activity(st, digest, pct):
 
 def _model_present():
     try:
+        model = active_ollama_model()
         r = requests.get(f"http://{OLLAMA_HOST}/api/tags", timeout=5)
         names = [m.get("name", "") for m in r.json().get("models", [])]
-        return any(n == OLLAMA_MODEL or n.startswith(OLLAMA_MODEL) for n in names)
+        return any(n == model or n.startswith(model) for n in names)
     except Exception:
         return False
 
@@ -312,7 +314,7 @@ def _step_lang():
     _set("lang", activity="Pulling model manifest")
     with requests.post(
         f"http://{OLLAMA_HOST}/api/pull",
-        json={"model": OLLAMA_MODEL, "stream": True},
+        json={"model": active_ollama_model(), "stream": True},
         stream=True,
         timeout=None,
     ) as resp:
@@ -368,6 +370,8 @@ _STEPS = [("logic", _step_logic), ("lang", _step_lang), ("audio", _step_audio)]
 
 def _run():
     configure_env()
+    ensure_tier()   # silent hardware detection -> pins KYBER_TIER on first run,
+                    # so the pull below fetches the right-sized model
     with _lock:
         _state["error"] = None
     try:

@@ -40,6 +40,9 @@ claim_result.json
 claim_connect_result.json
 activation_result.json
 
+# --- Local rollback backups (kept on disk, not in the repo) ---
+_backup_pre_tier/
+
 # --- OS / editor cruft ---
 .DS_Store
 Thumbs.db

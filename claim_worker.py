@@ -81,11 +81,13 @@ async def main():
             print(f"[{time.strftime('%H:%M:%S')}] [CLAIM] Scan finished -- found {len(macs)}: {macs}", flush=True)
             write_result("found", droids=[{"mac": m} for m in macs])
 
-    except Exception as e:
+    except (Exception, asyncio.CancelledError) as e:
         # Full traceback, not just str(e) -- so a totally unrelated failure
         # (import, permissions, anything) is visible here instead of being
         # silently flattened into a generic "not found" that looks
-        # identical to a real empty scan.
+        # identical to a real empty scan. CancelledError is caught too because
+        # it's a BaseException a plain "except Exception" would miss, which
+        # would let the scan die without ever writing a result.
         print("[CLAIM] Exception during scan:", flush=True)
         traceback.print_exc()
         write_result("not_found", error=str(e))

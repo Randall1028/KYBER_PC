@@ -6,7 +6,7 @@ KYBER turns your Droid Depot droid into a voice-driven companion: it listens, ta
 
 This is a hobbyist build for the *Star Wars* fan/maker community. It's free, and it's meant to stay that way (see [License](#license)).
 
-> ⚠️ **Beta (v0.85.1).** The Windows edition is a fresh port, now in beta testing. It runs end to end, but you may hit rough edges, so bug reports are welcome (see [Feedback & bugs](#feedback--bugs)).
+> ⚠️ **Beta (v0.85.5).** The Windows edition is a fresh port, now in beta testing. It runs end to end, but you may hit rough edges, so bug reports are welcome (see [Feedback & bugs](#feedback--bugs)).
 
 ---
 
@@ -80,10 +80,12 @@ Once the wizard finishes, your droid is listening. Say hi.
 
 ## Known limitations (beta)
 
-- **Gesture precision:** gestures have been dialed in as carefully as we can, but Droid Depot droids are mechanically imprecise, so mistimings can and will happen. A 180° spin might overshoot on one attempt and undershoot on the next. Give the droid some leeway here: KYBER is built for lively, in-character movement, not robotic precision.
+- **Droid won't connect during claim/activation:** on some PCs the droid shows up in the claim list, but pressing **Activate** stalls or comes back *"not found"* — likely a weak or wedged Bluetooth radio choking on that first connection. A workaround that often frees it up: open **Windows Settings → Bluetooth & devices**, find your droid in the device list, and **click it once**. You do *not* need to pair it — just clicking is enough to nudge Windows into opening the connection — then go back to KYBER and try again. Fair warning: it's finicky and not fully reliable, so you may need a couple of attempts. If your PC's built-in Bluetooth seems to be the culprit, a USB Bluetooth 5.0 adapter may be worth trying as a more stable alternative, though that hasn't been confirmed yet.
+- **Gesture precision:** gestures have been dialed in as carefully as possible, but Droid Depot droids are mechanically imprecise, so mistimings can and will happen. A 180° spin might overshoot on one attempt and undershoot on the next. Give the droid some leeway here: KYBER is built for lively, in-character movement, not robotic precision.
 - **Unsigned installer:** expect the SmartScreen / antivirus warnings noted above until the project is code-signed.
 - **WebView2:** the UI uses Microsoft's WebView2 runtime, built into Windows 11 and most updated Windows 10 installs. If the window comes up blank, install the [WebView2 runtime](https://developer.microsoft.com/microsoft-edge/webview2/) and relaunch.
 - **Microphone:** KYBER uses your Windows *default* input device; set the mic you want as the default in Windows Sound settings.
+- **Antivirus can silently block the microphone:** some security suites are aggressive about mic access and can cut off KYBER's microphone *even when KYBER is on their allow-list* — the mic shows as "in use by KYBER" but records nothing, and it frees up the instant you close KYBER. **Norton** was a repeat offender during testing. If your droid suddenly stops hearing you for no clear reason, check your antivirus's microphone / device-access protection, pause it briefly to confirm that's the cause, and add an explicit exception for `KYBER.exe`. (Norton's *SafeCam* only guards the webcam, so the mic block lives under its general real-time/device protection, not there.)
 - Microphone, networking, and Bluetooth behavior ultimately live in Windows's hands and can vary machine to machine.
 
 ---
@@ -115,4 +117,12 @@ KYBER is free because building droids should be fun and accessible, not a revenu
 
 ## Acknowledgments
 
-Built on top of [`bleak`](https://github.com/hbldh/bleak), [`pyDroidDepot`](https://pypi.org/project/pyDroidDepot/), [`Ollama`](https://ollama.com), [`faster-whisper`](https://github.com/SYSTRAN/faster-whisper), [`pywebview`](https://pywebview.flowrl.com/), [`pystray`](https://github.com/moses-palmer/pystray), and [`pydBeacon`](https://pypi.org/project/pydBeacon/).
+KYBER stands on a lot of other people's work, and it wouldn't exist without any of them.
+
+The Droid Depot Bluetooth protocol (the entire reason any of this is possible) was originally reverse-engineered and documented publicly by **Baptiste Laget**, who worked out the droids' BLE service, motor commands, and sound banks. Everything KYBER does to a droid traces back to that groundwork.
+
+That protocol knowledge reaches KYBER through **[`pyDroidDepot`](https://github.com/thetestgame/pyDroidDepot)** and **[`pydBeacon`](https://github.com/thetestgame/pydBeacon)**, both written by **Jordan Maxwell** ([thetestgame](https://github.com/thetestgame)), who turned it into usable Python.
+
+The brains are all open, local models and runtimes: **[Qwen3](https://ollama.com/library/qwen3)** (the language model, from the Qwen team at Alibaba), **[Whisper](https://github.com/openai/whisper)** (speech-to-text, from OpenAI) via **[`faster-whisper`](https://github.com/SYSTRAN/faster-whisper)**, and **[Ollama](https://ollama.com)**, which runs the model locally.
+
+And the app itself is held together by **[`bleak`](https://github.com/hbldh/bleak)** (Bluetooth), **[`pywebview`](https://pywebview.flowrl.com/)** (the UI window), and **[`pystray`](https://github.com/moses-palmer/pystray)** (the system tray).

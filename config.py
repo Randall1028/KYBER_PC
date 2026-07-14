@@ -115,6 +115,88 @@ BEACON_RELAY_ENABLED = os.getenv("BEACON_RELAY_ENABLED", "true").lower() == "tru
 ROAM_MODE_ENABLED = os.getenv("ROAM_MODE_ENABLED", "false").lower() == "true"
 
 
+# ---------------------------------------------------------------------------
+# Model tier -- capable PCs get the full 4B brain; weak machines (2-core CPUs
+# or under 8 GB RAM) silently get a lighter 1.5B that actually runs at a
+# conversational pace. Auto-detected ONCE on first run and pinned in .env as
+# KYBER_TIER; the user never sees or chooses it. Everything else -- the prompt,
+# temperature (0.0), Whisper -- is identical across tiers; only the Ollama model
+# differs. This is the single source of truth for the model tag, shared by
+# kyber_core.py and provisioning.py so the running brain and the downloader can
+# never disagree.
+# ---------------------------------------------------------------------------
+TIER_MODELS = {
+    "full": "qwen3:4b-instruct-2507-q4_K_M",   # capable PCs (unchanged default)
+    "lite": "qwen2.5:1.5b-instruct-q4_K_M",     # 2-core / low-RAM machines
+}
+DEFAULT_TIER = "full"
+
+
+def _total_ram_gb() -> float:
+    """Physical RAM in GB with no external dependency. Returns a large number if
+    it can't be determined, so a detection failure never wrongly forces Lite."""
+    try:
+        if os.name == "nt":
+            import ctypes
+
+            class _MEMORYSTATUSEX(ctypes.Structure):
+                _fields_ = [
+                    ("dwLength", ctypes.c_ulong),
+                    ("dwMemoryLoad", ctypes.c_ulong),
+                    ("ullTotalPhys", ctypes.c_ulonglong),
+                    ("ullAvailPhys", ctypes.c_ulonglong),
+                    ("ullTotalPageFile", ctypes.c_ulonglong),
+                    ("ullAvailPageFile", ctypes.c_ulonglong),
+                    ("ullTotalVirtual", ctypes.c_ulonglong),
+                    ("ullAvailVirtual", ctypes.c_ulonglong),
+                    ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+                ]
+
+            stat = _MEMORYSTATUSEX()
+            stat.dwLength = ctypes.sizeof(_MEMORYSTATUSEX)
+            ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat))
+            return stat.ullTotalPhys / (1024 ** 3)
+        return os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / (1024 ** 3)
+    except Exception:
+        return 999.0
+
+
+def detect_tier() -> str:
+    """Pick a tier from the hardware alone: 'lite' for weak machines (2 or fewer
+    logical CPUs, or under 8 GB RAM), 'full' otherwise. Silent by design."""
+    cores = os.cpu_count() or 4
+    if cores <= 2 or _total_ram_gb() < 8:
+        return "lite"
+    return "full"
+
+
+def active_tier() -> str:
+    """The tier currently in force, read fresh from the environment/.env and
+    defaulting safely to full if unset or unrecognized."""
+    t = (os.getenv("KYBER_TIER", "") or "").strip().lower()
+    return t if t in TIER_MODELS else DEFAULT_TIER
+
+
+def active_ollama_model() -> str:
+    """The Ollama model tag for the active tier -- what both the brain and the
+    provisioner use, so they can never drift apart."""
+    return TIER_MODELS[active_tier()]
+
+
+def ensure_tier() -> str:
+    """Detect and PIN the tier once, on first run. If KYBER_TIER is already set
+    (a prior run, or a manual override someone put in .env), it is left alone.
+    Called by provisioning before the model download so the right-sized model
+    gets pulled. Returns the active tier."""
+    existing = (os.getenv("KYBER_TIER", "") or "").strip().lower()
+    if existing in TIER_MODELS:
+        return existing
+    tier = detect_tier()
+    update_env_values({"KYBER_TIER": tier})
+    os.environ["KYBER_TIER"] = tier  # visible to this process immediately
+    return tier
+
+
 def update_env_values(values: dict) -> None:
     """Writes one or more key/value pairs to the real .env file on disk,
     creating the file first if it doesn't exist yet. Uses python-dotenv's

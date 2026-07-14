@@ -327,7 +327,8 @@ def transcribe_segment(model: WhisperModel, audio_segment: np.ndarray):
 OLLAMA_URL = "http://127.0.0.1:11434/api/chat"  # not "localhost" -- on Windows, resolving
                                                  # that hostname can try IPv6 first and only
                                                  # fall back to IPv4 after a real fixed delay
-OLLAMA_MODEL = "qwen3:4b-instruct-2507-q4_K_M"
+from config import active_ollama_model
+OLLAMA_MODEL = active_ollama_model()  # tier-driven: 4B on capable PCs, 1.5B on weak CPUs (see config.TIER_MODELS)
 
 # Real personality now, not a hardcoded stand-in -- built from whatever's
 # actually in personality_maps/ for ACTIVE_PERSONALITY (config.py). NOTE:
