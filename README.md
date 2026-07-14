@@ -85,7 +85,7 @@ Once the wizard finishes, your droid is listening. Say hi.
 - **Unsigned installer:** expect the SmartScreen / antivirus warnings noted above until the project is code-signed.
 - **WebView2:** the UI uses Microsoft's WebView2 runtime, built into Windows 11 and most updated Windows 10 installs. If the window comes up blank, install the [WebView2 runtime](https://developer.microsoft.com/microsoft-edge/webview2/) and relaunch.
 - **Microphone:** KYBER uses your Windows *default* input device; set the mic you want as the default in Windows Sound settings.
-- **Antivirus can silently block the microphone:** some security suites are aggressive about mic access and can cut off KYBER's microphone *even when KYBER is on their allow-list* — the mic shows as "in use by KYBER" but records nothing, and it frees up the instant you close KYBER. **Norton** was a repeat offender during testing. If your droid suddenly stops hearing you for no clear reason, check your antivirus's microphone / device-access protection, pause it briefly to confirm that's the cause, and add an explicit exception for `KYBER.exe`. (Norton's *SafeCam* only guards the webcam, so the mic block lives under its general real-time/device protection, not there.)
+- **Antivirus can block the microphone:** some security software silently blocks KYBER's mic even when it's white-listed. If Windows says the mic is connected to KYBER and nothing is being heard, check all possible settings in your security software to determine what's blocking it (ex: Norton's SafeCam seems to block it).
 - Microphone, networking, and Bluetooth behavior ultimately live in Windows's hands and can vary machine to machine.
 
 ---
