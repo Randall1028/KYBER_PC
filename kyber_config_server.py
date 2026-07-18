@@ -623,7 +623,7 @@ MAINFRAME_HOME_HTML = """<!DOCTYPE html>
       <div class="panel-header">Droid Identity</div>
       <div class="panel-body">
         <div class="field">
-          <label class="field-label">Number/Designation</label>
+          <label class="field-label">Number/Designation <span class="field-hint">(ex: R2-D2, BB-8, R51-4B3)</span></label>
           <input type="text" name="DROID_NAME" id="droidNameInput" value="{droid_name}" placeholder="##-###" maxlength="10" autocomplete="off">
         </div>
         <div class="field">
@@ -2147,7 +2147,7 @@ WELCOME_HTML = """<!DOCTYPE html>
     </div>
 
     <div class="panel">
-      <div class="panel-header">Number/Designation</div>
+      <div class="panel-header">Number/Designation <span style="font-weight:500;font-style:italic;font-size:11px;text-transform:none;letter-spacing:0;opacity:.75;color:var(--muted);">(ex: R2-D2, BB-8, R51-4B3)</span></div>
       <div class="panel-body">
         <input type="text" class="ident-select" name="droid_name" placeholder="##-###" maxlength="10" autocomplete="off" value="{droid_name}">
         <p class="wizard-note">Optional — you can always set this later from the Mainframe.</p>
@@ -2664,6 +2664,180 @@ CHASSIS_ICON_MAP = {
 }
 
 
+# ====================================================================
+# v0.86.1 -- app-wide chrome: appbar header + persistent Com Uplink dock.
+# Injected globally through _send_html on the 8 app pages (identified by
+# the shared footer). The 6 first-run setup-wizard pages have no footer
+# and are deliberately left on their original linear 'crumb' chrome.
+# ====================================================================
+_CHASSIS_SVG_JSON = json.dumps(CHASSIS_ICON_MAP)
+
+
+def sanitize_droid_name(raw):
+    """Guardrail for the droid name (v0.86.1). Keep only letters, digits,
+    spaces, and hyphens -- covers R2-D2 / BB-8 / R51-4B3 while stripping any
+    character that could break an HTML attribute, a JS string literal (the
+    Calibration page injects the name into one), or the brain's LLM prompt.
+    Applied at every save site so all downstream renders can trust the value."""
+    return re.sub(r"[^A-Za-z0-9 -]", "", raw or "").strip()
+
+
+NEW_CHROME_STYLE = """<style>
+  .appbar{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+  .logo{width:62px;height:62px;filter:drop-shadow(0 0 13px rgba(0,168,255,.55))}.logo svg{width:100%;height:100%;display:block}
+  .brand .n{font-family:var(--font-head);font-weight:700;letter-spacing:.12em;font-size:21px;color:var(--gold-text);line-height:1.1}
+  .brand .tag{font-family:var(--font-body);font-weight:600;font-size:10.5px;color:var(--muted);letter-spacing:.2px;margin-top:2px}
+  .spacer{flex:1}
+  .brain{display:flex;align-items:center;gap:7px;font-family:var(--font-body);font-weight:600;font-size:10.5px;color:var(--muted)}
+  .brain .d{width:8px;height:8px;border-radius:50%;background:var(--success);box-shadow:0 0 6px var(--success)}
+  .brainwrap{display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+  .ver{font-family:var(--font-body);font-weight:500;font-size:9.5px;color:var(--muted);opacity:.72;letter-spacing:.3px}
+  .page-label{text-align:center;color:var(--gold-text);font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin:2px 0 20px;font-family:var(--font-head)}
+  .wrap{padding-bottom:132px}
+  .field-hint{font-style:italic;font-size:11px;font-weight:500;color:var(--muted);opacity:.8;letter-spacing:.2px}
+  .msg.says.did .bub{background:rgba(143,174,193,.08);border:1px dashed rgba(143,174,193,.5);border-radius:14px 14px 14px 4px;padding:5px 14px;font-size:22px;box-shadow:none}
+  /* dock — mystery bar, deliberately unlabeled */
+  .dock{position:fixed;left:0;right:0;bottom:14px;max-width:660px;margin:0 auto;z-index:40;border:1px solid transparent;border-radius:16px;display:flex;align-items:center;gap:14px;padding:11px 16px;cursor:pointer;
+    background-image:linear-gradient(135deg,var(--panel),var(--void)),linear-gradient(135deg,var(--edge),var(--dim));background-origin:border-box;background-clip:padding-box,border-box;box-shadow:0 8px 26px -8px rgba(0,0,0,.6);transition:transform .15s}
+  .dock:active{transform:scale(.994)}
+  .dock .grip{position:absolute;top:5px;left:50%;transform:translateX(-50%);width:34px;height:3px;border-radius:3px;background:rgba(143,174,193,.3)}
+  .dock .av{width:44px;height:44px;flex:0 0 auto;position:relative;filter:drop-shadow(0 0 8px var(--mood,#00a8ff));transition:filter .5s}
+  .dock .av svg{width:100%;height:100%}
+  .dock .who .nm{font-family:var(--font-head);font-weight:700;font-size:15px;color:var(--gold-text);letter-spacing:.03em}
+  .dock .who .st{font-family:var(--font-body);font-weight:600;font-size:10px;color:var(--muted);display:flex;align-items:center;gap:6px;margin-top:1px}
+  .dock .who .st .d{width:6px;height:6px;border-radius:50%;background:var(--success);box-shadow:0 0 6px var(--success)}
+  .dock .feel{margin-left:auto;position:relative;display:flex;align-items:center;justify-content:center;min-width:60px;height:46px;padding:0 15px;font-size:25px;border-radius:14px;background:rgba(5,18,34,.6);border:1px solid var(--mood,#00a8ff);box-shadow:0 0 18px -6px var(--mood,#00a8ff);transition:border-color .5s,box-shadow .5s}
+  .dock .feel::before{content:"";position:absolute;left:-7px;top:50%;transform:translateY(-50%);border:6px solid transparent;border-right-color:var(--mood,#00a8ff);opacity:.85}
+  .dock .feel.pop{animation:pop .5s ease}@keyframes pop{0%{transform:scale(.7)}55%{transform:scale(1.12)}100%{transform:scale(1)}}
+
+  .backdrop{position:fixed;inset:0;background:rgba(5,18,34,.45);opacity:0;pointer-events:none;transition:opacity .35s;z-index:50}
+  .backdrop.show{opacity:1;pointer-events:auto}
+  .sheet{position:fixed;left:0;right:0;bottom:0;max-height:96vh;z-index:60;transform:translateY(100%);transition:transform .38s cubic-bezier(.4,0,.2,1);border-top:1px solid transparent;border-radius:20px 20px 0 0;display:flex;flex-direction:column;
+    background-image:linear-gradient(135deg,var(--panel),var(--void)),linear-gradient(135deg,var(--edge),var(--dim));background-origin:border-box;background-clip:padding-box,border-box;box-shadow:0 -12px 40px rgba(0,0,0,.5)}
+  .sheet.open{transform:translateY(0)}
+  .sheet-head{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:8px 18px 10px;position:relative;border-bottom:1px solid rgba(143,174,193,.22);cursor:pointer;transition:background .2s}
+  .sheet-head:hover{background:rgba(199,156,114,.06)}
+  .sheet-head .grip{width:42px;height:4px;border-radius:3px;background:rgba(143,174,193,.35)}
+  .sheet-head .bigchev{width:32px;height:32px;fill:var(--muted);opacity:.95;transition:transform .2s,opacity .2s,fill .2s}
+  .sheet-head:hover .bigchev{fill:var(--gold-text);opacity:1;transform:translateY(2px)}
+  .sheet-title{position:absolute;left:18px;top:50%;transform:translateY(-45%);font-family:var(--font-head);font-weight:700;font-size:15px;letter-spacing:.05em;text-transform:uppercase;color:var(--gold-text)}
+
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:22px;padding:20px 18px 50px;max-width:1000px;margin:0 auto;width:100%;align-items:center}
+  .droidcol{display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative}
+  .droidwrap{position:relative;width:min(96%,410px);max-width:100%}
+  .bubble{position:absolute;top:6px;right:4px;z-index:3;min-width:88px;height:78px;display:flex;align-items:center;justify-content:center;padding:0 22px;font-size:44px;border-radius:26px;background:rgba(5,18,34,.72);border:1.5px solid var(--mood,#00a8ff);box-shadow:0 0 32px -6px var(--mood,#00a8ff);transition:border-color .5s,box-shadow .5s}
+  .bubble::after{content:"";position:absolute;left:18px;bottom:-13px;border:8px solid transparent;border-top-color:var(--mood,#00a8ff);opacity:.85}
+  .bubble.pop{animation:pop .5s ease}
+  .droidart{width:min(96%,380px);aspect-ratio:1;margin:22px auto 0;filter:drop-shadow(0 0 16px var(--mood,#00a8ff));transition:filter .6s;animation:bob 4.4s ease-in-out infinite}
+  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+  .droidart svg{width:100%;height:100%}
+  .bigname{font-family:var(--font-head);font-weight:700;font-size:27px;color:var(--gold-text);letter-spacing:.05em;margin-top:16px}
+  .bigst{font-family:var(--font-body);font-weight:600;font-size:10px;color:var(--muted);margin-top:2px;display:flex;align-items:center;gap:6px}
+  .bigst .d{width:6px;height:6px;border-radius:50%;background:var(--success);box-shadow:0 0 6px var(--success)}
+
+  .logpanel{display:flex;flex-direction:column;min-height:0;height:min(70vh,500px);border:1px solid transparent;border-radius:12px;overflow:hidden;background-image:linear-gradient(135deg,rgba(32,57,85,.5),var(--void)),linear-gradient(135deg,var(--edge),var(--dim));background-origin:border-box;background-clip:padding-box,border-box}
+  .loghead{display:flex;align-items:center;justify-content:flex-end;padding:8px 14px;border-bottom:1px solid rgba(143,174,193,.22)}
+  .keybtn{background:none;border:1px solid var(--edge);color:var(--muted);font-family:var(--font-head);font-weight:700;font-size:10px;padding:4px 10px;border-radius:6px;cursor:pointer;letter-spacing:.3px}
+  .keybtn:hover{color:var(--gold-text)}
+  .loglist{flex:1;overflow-y:auto;display:flex;flex-direction:column;justify-content:flex-start;gap:8px;padding:12px 12px 14px}
+  .loglist::-webkit-scrollbar{width:6px}.loglist::-webkit-scrollbar-thumb{background:rgba(143,174,193,.2);border-radius:3px}
+  .msg{display:flex;align-items:flex-end;gap:7px;max-width:86%;animation:rise .4s ease both}
+  @keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .msg.heard{align-self:flex-end;flex-direction:row-reverse}
+  .msg.heard .bub{background:rgba(0,168,255,.13);border:1px solid rgba(0,168,255,.3);color:var(--text);border-radius:14px 14px 4px 14px;padding:7px 12px;font-size:13px}
+  .msg.says{align-self:flex-start}
+  .msg.says .mini{width:24px;height:24px;flex:0 0 auto;opacity:.85}.msg.says .mini svg{width:100%;height:100%}
+  .msg.says .bub{background:rgba(255,255,255,.03);border:1px solid var(--emo,var(--edge));border-radius:14px 14px 14px 4px;padding:5px 14px;font-size:22px;box-shadow:0 0 14px -8px var(--emo,transparent)}
+  .msg.says.is-neutral .bub{font-size:19px;opacity:.7}
+  .msg .ts{font-family:var(--font-body);font-weight:500;font-size:9px;color:var(--muted);padding-bottom:2px}
+
+  .dkey{position:absolute;right:16px;bottom:16px;width:250px;border:1px solid transparent;border-radius:12px;padding:13px 15px;z-index:12;display:none;
+    background-image:linear-gradient(135deg,var(--panel),var(--void)),linear-gradient(135deg,var(--edge),var(--dim));background-origin:border-box;background-clip:padding-box,border-box;box-shadow:0 18px 50px rgba(0,0,0,.55)}
+  .dkey.show{display:block}
+  .dkey h3{font-family:var(--font-head);font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--gold-text);margin-bottom:8px}
+  .dkey .r{display:flex;gap:10px;font-size:12px;padding:3px 0;color:var(--text);white-space:nowrap;align-items:center}.dkey .r .g{font-size:14px;flex:0 0 auto;white-space:nowrap;width:84px}
+</style>"""
+
+_DOCK_MARKUP = '<div class="dock" id="kyDock">\n    <div class="grip"></div>\n    <div class="av" id="kyDockAv"></div>\n    <div class="who"><div class="nm" id="kyDockNm">__NAME__</div><div class="st" id="kyDockSt"><span class="d ky-dot"></span><span class="t">LISTENING</span></div></div>\n    <div class="feel" id="kyDockFeel">·</div>\n  </div>\n  <div class="backdrop" id="kyBackdrop"></div>\n  <div class="sheet" id="kySheet">\n    <div class="sheet-head" id="kySheetHead" title="Collapse">\n      <div class="grip"></div>\n      <span class="sheet-title">Com Uplink</span>\n      <svg class="bigchev" viewBox="0 0 24 24"><path d="M2.6 8 L12 17 L21.4 8 L18.1 8 L12 13.1 L5.9 8 Z"/></svg>\n    </div>\n    <div class="cols">\n      <div class="droidcol">\n        <div class="droidwrap"><div class="bubble" id="kyBubble">·</div><div class="droidart" id="kyDroidart"></div></div>\n        <div class="bigname" id="kyBigname">__NAME__</div>\n        <div class="bigst" id="kyBigst"><span class="d ky-dot"></span><span class="t">LISTENING</span></div>\n      </div>\n      <div class="logpanel">\n        <div class="loghead"><button class="keybtn" id="kyKeybtn">Legend</button></div>\n        <div class="loglist" id="kyLoglist"></div>\n      </div>\n    </div>\n    <div class="dkey" id="kyDkey">\n      <h3>Legend</h3>\n      <div class="r"><span class="g">✨ 💫 💛 🟢</span> happy</div>\n      <div class="r"><span class="g">⚡ 🎉 💥</span> excited</div>\n      <div class="r"><span class="g">🥀 💔</span> sad</div>\n      <div class="r"><span class="g">💢 🔥 🚩</span> angry</div>\n      <div class="r"><span class="g">⚠️ ‼️ ❗</span> scared</div>\n      <div class="r"><span class="g">⛔ 🚫</span> disgusted</div>\n      <div class="r"><span class="g">👀 ❓ 🔎</span> curious</div>\n      <div class="r"><span class="g">🌀 ⁉️ ❔</span> confused</div>\n      <div class="r"><span class="g">🛡 🚧 🛑</span> defensive</div>\n      <div class="r"><span class="g">⚪</span> neutral</div>\n    </div>\n  </div>'
+
+DOCK_SCRIPT = '<script>\n(function(){\n  var POOLS={happy:["✨","💫","💛","🟢"],excited:["⚡","🎉","💥"],\n    sad:["🥀","💔"],angry:["💢","🔥","🚩"],\n    scared:["⚠️","‼️","❗"],disgusted:["⛔","🚫"],\n    curious:["👀","❓","🔎"],confused:["🌀","⁉️","❔"],\n    defensive:["🛡","🚧","🛑"],neutral:["⚪"]};\n  var MOOD={happy:"#ffcf5c",excited:"#00c2ff",sad:"#6f8fd6",angry:"#ff5a4d",scared:"#ffe14d",\n    disgusted:"#7ed957",curious:"#35d0ff",confused:"#c07cff",defensive:"#ffa23e",neutral:"#8FAEC1"};\n  var CUSTOM=window.__KYBER_MOOD_EMOJI||{}, CHASSIS=window.__KYBER_CHASSIS_SVG||{};\n  var GESTURE={expressive_forward:"👋",expressive_about_face:"↩️",expressive_back:"🔙",\n    expressive_dance:"💃",expressive_retreat:"💨",that_way:"👉",\n    expressive_mode_on:"🤸",expressive_mode_off:"🧍",hotel_mode_on:"🌙",hotel_mode_off:"☀️",\n    pet_mode_on:"🐾",pet_mode_off:"😴",stay_awake:"☕",go_to_sleep:"💤"};\n  var LABELS={R:"R-SERIES",BB:"BB-SERIES",C:"C-SERIES",A:"A-SERIES",BD:"BD-SERIES"};\n  var URL="http://127.0.0.1:5010/status";\n  var $=function(id){return document.getElementById(id);};\n  var dock=$("kyDock"),dockAv=$("kyDockAv"),dockFeel=$("kyDockFeel"),dockNm=$("kyDockNm"),dockSt=$("kyDockSt"),\n      sheet=$("kySheet"),backdrop=$("kyBackdrop"),sheetHead=$("kySheetHead"),\n      bubble=$("kyBubble"),droidart=$("kyDroidart"),bigname=$("kyBigname"),bigst=$("kyBigst"),\n      list=$("kyLoglist"),dkey=$("kyDkey"),keybtn=$("kyKeybtn"),core=$("kyCore");\n  if(!dock)return;\n  var rand=function(a){return a[Math.floor(Math.random()*a.length)];};\n  function glyphFor(emo){\n    if(POOLS[emo])return {g:rand(POOLS[emo]),col:MOOD[emo],neutral:emo==="neutral"};\n    if(CUSTOM[emo])return {g:CUSTOM[emo],col:"#ECDBC5",neutral:false};\n    return {g:"•",col:MOOD.neutral,neutral:true};\n  }\n  function fmtTs(ts){ if(!ts)return ""; var d=new Date(ts*1000);\n    return ("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2); }\n  var curType=null;\n  function setChassis(t){ t=t||"R"; if(t===curType)return; curType=t;\n    var svg=CHASSIS[t]||CHASSIS.R||""; if(dockAv)dockAv.innerHTML=svg; if(droidart)droidart.innerHTML=svg; }\n  function applyLive(g,col,neutral){\n    [bubble,dockFeel].forEach(function(el){ if(!el)return;\n      el.style.setProperty("--mood",col); el.textContent=g;\n      el.classList.remove("pop"); void el.offsetWidth; el.classList.add("pop"); });\n    if(droidart)droidart.style.setProperty("--mood",col);\n    if(dockAv)dockAv.style.setProperty("--mood",col);\n    if(bubble)bubble.classList.toggle("is-neutral",neutral);\n  }\n  var seen={}, seenOrder=[];\n  function remember(k){ seen[k]=1; seenOrder.push(k); if(seenOrder.length>64){ delete seen[seenOrder.shift()]; } }\n  function renderLog(recent){\n    if(!recent||!recent.length)return;\n    var items=recent.slice().sort(function(a,b){ return (a.ts||0)-(b.ts||0); });\n    var newest=null;\n    items.forEach(function(rec){\n      var key=(rec.ts||"")+"|"+(rec.heard||"")+"|"+(rec.emotion||"")+"|"+(rec.gesture||"");\n      if(seen[key])return; remember(key);\n      if(rec.heard){\n        var h=document.createElement("div");h.className="msg heard";\n        var hb=document.createElement("div");hb.className="bub";hb.textContent=rec.heard;\n        var ht=document.createElement("div");ht.className="ts";ht.textContent=fmtTs(rec.ts);\n        h.appendChild(hb);h.appendChild(ht);list.appendChild(h);\n      }\n      var s=document.createElement("div");\n      var mini=document.createElement("div");mini.className="mini";mini.innerHTML=CHASSIS[curType]||CHASSIS.R||"";\n      var sb=document.createElement("div");sb.className="bub";\n      var st=document.createElement("div");st.className="ts";st.textContent=fmtTs(rec.ts);\n      if(rec.gesture){\n        // An action the droid did -- dashed "did" bubble, glyph only. It does\n        // NOT drive the live feeling bubble (an action isn\'t a mood).\n        s.className="msg says did";\n        sb.textContent=GESTURE[rec.gesture]||"⚙️";\n      } else {\n        var r=glyphFor(rec.emotion);\n        s.className="msg says"+(r.neutral?" is-neutral":"");\n        s.style.setProperty("--emo",r.col);\n        sb.textContent=r.g;\n        newest=r;   // only feelings move the live bubble\n      }\n      s.appendChild(mini);s.appendChild(sb);s.appendChild(st);list.appendChild(s);\n    });  // items\n    while(list.children.length>16)list.removeChild(list.firstChild);\n    list.scrollTop=list.scrollHeight;\n    // Live bubble mirrors the newest chat entry exactly -- same glyph, same\n    // colour -- so the droid\'s speech bubble and the log never disagree, and\n    // it only changes when a genuinely new reaction is appended.\n    if(newest)applyLive(newest.g,newest.col,newest.neutral);\n  }\n  function goNeutral(){\n    [bubble,dockFeel].forEach(function(el){ if(!el)return;\n      el.style.setProperty("--mood","#8FAEC1"); el.textContent="·"; el.classList.remove("pop"); });\n    if(bubble)bubble.classList.add("is-neutral");\n    if(droidart)droidart.style.setProperty("--mood","#31465c");\n    if(dockAv)dockAv.style.setProperty("--mood","#31465c");\n  }\n  function setState(on,name,type){\n    var txt=on?("LISTENING · "+(LABELS[type]||"")):"OFFLINE";\n    if(dockNm&&name)dockNm.textContent=name;\n    if(bigname&&name)bigname.textContent=name;\n    [dockSt,bigst].forEach(function(w){ if(!w)return; var t=w.querySelector(".t"); if(t)t.textContent=txt; });\n    if(core){ var ct=core.querySelector(".t"); if(ct)ct.textContent=on?"CORE ONLINE":"CORE OFFLINE"; }\n    var dots=document.querySelectorAll(".ky-dot");\n    for(var i=0;i<dots.length;i++){ dots[i].style.background=on?"var(--success)":"var(--muted)";\n      dots[i].style.boxShadow=on?"0 0 6px var(--success)":"none"; }\n    if(!on)goNeutral();\n  }\n  function poll(){\n    fetch(URL,{cache:"no-store"}).then(function(r){ if(!r.ok)throw 0; return r.json(); })\n      .then(function(s){\n        var on=s.connected!==false;\n        setChassis(s.droid_type);\n        setState(on,s.droid_name,s.droid_type);\n        if(on){ renderLog(s.recent); }\n      }).catch(function(){ setState(false); });\n  }\n  setChassis(window.__KYBER_DROID_TYPE||"R");\n  poll(); setInterval(poll,1500);\n  var open=function(){sheet.classList.add("open");backdrop.classList.add("show");};\n  var close=function(){sheet.classList.remove("open");backdrop.classList.remove("show");};\n  dock.onclick=open; sheetHead.onclick=close; backdrop.onclick=close;\n  keybtn.onclick=function(e){e.stopPropagation();dkey.classList.toggle("show");};\n  document.addEventListener("click",function(e){\n    if(dkey.classList.contains("show")&&!dkey.contains(e.target)&&e.target!==keybtn)dkey.classList.remove("show");\n  });\n})();\n</script>'
+
+def _read_dock_context():
+    from dotenv import dotenv_values as _dv
+    try:
+        vals = _dv(ENV_PATH)
+    except Exception:
+        vals = {}
+    name = vals.get("DROID_NAME") or "Your droid"
+    dtype = vals.get("DROID_TYPE") or "R"
+    mood_emoji = {}
+    try:
+        active = vals.get("ACTIVE_SOUND_PROFILE", "1")
+        p = os.path.join(MAP_DIR, "sound_profile_%s.json" % active)
+        with open(p, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        mm = data.get("mood_meta", {}) or {}
+        mood_emoji = {k: (v.get("emoji") or "") for k, v in mm.items() if isinstance(v, dict)}
+    except Exception:
+        mood_emoji = {}
+    return name, dtype, mood_emoji
+
+def _build_appbar():
+    return (
+        '<div class="appbar">\n'
+        '    <div class="logo">' + LOGO_SVG + '</div>\n'
+        '    <div class="brand"><div class="n">K.Y.B.E.R.</div>'
+        '<div class="tag">Kinetic Yammering and Behavioral Engine Routines</div></div>\n'
+        '    <div class="spacer"></div>\n'
+        '    <div class="brainwrap"><div class="brain" id="kyCore">'
+        '<span class="d ky-dot"></span><span class="t">CORE ONLINE</span></div>'
+        '<div class="ver">v' + APP_VERSION + '</div></div>\n'
+        '  </div>'
+    )
+
+def _esc(s):
+    return (str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            .replace('"', "&quot;").replace("'", "&#39;"))
+
+_HEADER_RE = re.compile(r'<div class="header">.*?\n  </div>\s*(?:<div class="status-bar">.*?\n  </div>\s*)?', re.S)
+
+def apply_new_chrome(html):
+    """Swap the legacy centered header + status pill for the appbar, drop the
+    footer, and inject the persistent Com Uplink dock. Runs only on app pages
+    (those carrying the shared footer). Pure string surgery on already-rendered
+    HTML -- no .format() -- so template braces are never touched."""
+    m = re.search(r'<p class="secondary-header">(.*?)</p>', html, re.S)
+    if m:
+        title = m.group(1).strip()
+    else:
+        m2 = re.search(r'<h1>(.*?)</h1>', html, re.S)
+        title = m2.group(1).strip() if m2 else ""
+    appbar = _build_appbar()
+    # Drop the legacy header (+ optional status bar) wherever it sits, then
+    # anchor the appbar at the very top of the content column. Templates are
+    # inconsistent -- some put the header before the nav, some after -- so
+    # anchoring to .wrap guarantees the logo is always on top.
+    html = _HEADER_RE.sub("", html, count=1)
+    html = html.replace('<div class="wrap">', '<div class="wrap">\n  ' + appbar, 1)
+    label = '<div class="page-label">' + title + '</div>'
+    if "</nav>" in html:
+        html = html.replace("</nav>", "</nav>\n  " + label, 1)
+    else:
+        html = html.replace(appbar, appbar + "\n  " + label, 1)
+    html = html.replace(
+        '<div class="footer"><p>K.Y.B.E.R. -- Kinetic Yammering and '
+        'Behavioral Engine Routines -- Open Source Project</p></div>', "")
+    html = html.replace("</head>", NEW_CHROME_STYLE + "\n</head>", 1)
+    name, dtype, mood_emoji = _read_dock_context()
+    data_script = ('<script>window.__KYBER_CHASSIS_SVG=' + _CHASSIS_SVG_JSON +
+                   ';window.__KYBER_MOOD_EMOJI=' + json.dumps(mood_emoji) +
+                   ';window.__KYBER_DROID_TYPE=' + json.dumps(dtype) + ';</script>')
+    dock = _DOCK_MARKUP.replace("__NAME__", _esc(name))
+    html = html.replace("</body>", data_script + "\n" + dock + "\n" + DOCK_SCRIPT + "\n</body>", 1)
+    return html
+
+
+
 def render_mic_page(path: str = "yes") -> str:
     from dotenv import dotenv_values as _dv
     droid_type = _dv(ENV_PATH).get("DROID_TYPE", "R")
@@ -3125,14 +3299,15 @@ class MainframeHandler(BaseHTTPRequestHandler):
             pass
 
     def _send_html(self, html: str):
-        # Stamp the app version into the shared page footer (single source:
-        # config.APP_VERSION <- the VERSION file). One replace here covers every
-        # page, since they all route through _send_html and share this footer.
-        html = html.replace(
-            "-- Open Source Project</p>",
-            '-- Open Source Project -- <span style="color:#ECDBC5;opacity:0.85;">v'
-            + APP_VERSION + "</span></p>",
-        )
+        # v0.86.1: on the 8 app pages (identified by the shared footer), swap in
+        # the appbar header + persistent Com Uplink dock and drop the footer.
+        # The 6 first-run setup-wizard pages have no footer and are left as-is.
+        # Wrapped so a transform bug can never take down a page render.
+        if '<div class="footer">' in html:
+            try:
+                html = apply_new_chrome(html)
+            except Exception:
+                pass
         body = html.encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -3764,7 +3939,7 @@ class MainframeHandler(BaseHTTPRequestHandler):
 
             update_env_values({
                 "DROID_TYPE": field("DROID_TYPE", "R"),
-                "DROID_NAME": field("DROID_NAME", "").strip(),
+                "DROID_NAME": sanitize_droid_name(field("DROID_NAME", "")),
                 "ACTIVE_PERSONALITY": field("ACTIVE_PERSONALITY", "1"),
                 "ACTIVE_SOUND_PROFILE": field("ACTIVE_SOUND_PROFILE", "1"),
             })
@@ -3786,7 +3961,7 @@ class MainframeHandler(BaseHTTPRequestHandler):
                 return fields.get(name, [default])[0]
 
             chassis = field("chassis", "R")
-            droid_name = field("droid_name", "").strip()
+            droid_name = sanitize_droid_name(field("droid_name", ""))
             update_env_values({"DROID_TYPE": chassis, "DROID_NAME": droid_name})
 
             traits = {

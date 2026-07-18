@@ -152,6 +152,38 @@ def status():
 
 _ollama_proc = None
 
+# Ollama can be started by whichever KYBER process needs it first -- often the
+# Mainframe (config server) during setup, NOT the tray. When that happens the
+# tray's own _ollama_proc is None, so the old stop_ollama() found nothing to
+# kill and Ollama lingered in the background after a clean quit. Fix: whoever
+# actually launches `ollama serve` records its PID to a shared file next to the
+# runtime; stop_ollama() falls back to that PID so any process can tear it down.
+_OLLAMA_PID_FILE = os.path.join(RUNTIME_DIR, "ollama.pid")
+
+
+def _write_ollama_pid(pid):
+    try:
+        os.makedirs(RUNTIME_DIR, exist_ok=True)
+        with open(_OLLAMA_PID_FILE, "w") as f:
+            f.write(str(pid))
+    except Exception:
+        pass
+
+
+def _read_ollama_pid():
+    try:
+        with open(_OLLAMA_PID_FILE) as f:
+            return int(f.read().strip())
+    except Exception:
+        return None
+
+
+def _clear_ollama_pid():
+    try:
+        os.remove(_OLLAMA_PID_FILE)
+    except Exception:
+        pass
+
 
 def _ollama_up():
     try:
@@ -180,6 +212,9 @@ def ensure_ollama_running(timeout=40):
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
+    # Record the PID so another process (e.g. the tray on quit) can stop it even
+    # though its own _ollama_proc global is None -- this is the lingering-Ollama fix.
+    _write_ollama_pid(_ollama_proc.pid)
     deadline = time.time() + timeout
     while time.time() < deadline:
         if _ollama_up():
@@ -189,26 +224,40 @@ def ensure_ollama_running(timeout=40):
 
 
 def stop_ollama():
-    """Stop the ollama server we started (called by tray_shell on exit).
+    """Stop the ollama server (called by tray_shell on exit).
 
     Kills the whole process TREE, not just ollama.exe: loading a model spawns a
-    llama-server.exe child that holds GPU memory and locks the runtime DLLs, and
-    a plain terminate() on Windows leaves that child orphaned (which then blocks
-    the next rebuild / data wipe). taskkill /T takes the child down too."""
+    runner child that holds GPU memory and locks the runtime DLLs, and a plain
+    terminate() on Windows leaves that child orphaned (which then blocks the next
+    rebuild / data wipe). taskkill /T takes the child down too.
+
+    Cross-process: if this process didn't start Ollama itself (_ollama_proc is
+    None -- e.g. the Mainframe launched it during setup), fall back to the PID
+    recorded in the shared pid file. The IMAGENAME filter guards against a
+    recycled PID -- we only kill it if it's actually still ollama.exe."""
     global _ollama_proc
+    pid = None
     if _ollama_proc is not None and _ollama_proc.poll() is None:
+        pid = _ollama_proc.pid
+    if pid is None:
+        pid = _read_ollama_pid()
+    if pid is not None:
         try:
             if os.name == "nt":
                 subprocess.run(
-                    ["taskkill", "/F", "/T", "/PID", str(_ollama_proc.pid)],
+                    ["taskkill", "/F", "/T",
+                     "/FI", f"PID eq {pid}",
+                     "/FI", "IMAGENAME eq ollama.exe"],
                     creationflags=_CREATE_NO_WINDOW,
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                 )
             else:
-                _ollama_proc.terminate()
+                import signal
+                os.kill(pid, signal.SIGTERM)
         except Exception:
             pass
     _ollama_proc = None
+    _clear_ollama_pid()
 
 
 # ---------------------------------------------------------------------------

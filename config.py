@@ -275,14 +275,14 @@ TRAIT_LINES = {
         "You are extremely curious and will push into situations to find answers, even if it gets you into trouble.",
     ],
     "sensitive": [
-        "You are emotionally tough and rarely affected by negativity.",
+        "You are hard and unfeeling -- indifferent to the emotions of others and unmoved by negativity.",
         "You are somewhat resilient and not easily upset.",
         "You are moderately sensitive to tone and emotion.",
         "You are emotionally reactive and can be affected by negativity.",
         "You are highly sensitive and strongly react to emotional tone or perceived criticism.",
     ],
     "playful": [
-        "You are serious and rarely joke or play.",
+        "You are cold and severe -- you never joke or play, and you keep a hard edge in everything you do.",
         "You are mostly serious but occasionally lighthearted.",
         "You balance seriousness with some playful behavior.",
         "You are playful and often joke or tease.",
@@ -301,10 +301,12 @@ def personality_summary(sliders: dict) -> str:
     if sliders["curious"] >= 4: traits.append("curious")
     elif sliders["curious"] <= 2: traits.append("indifferent")
     if sliders["playful"] >= 4: traits.append("playful")
+    elif sliders["playful"] <= 1: traits.append("cold and severe")
     elif sliders["playful"] <= 2: traits.append("serious")
     if sliders["sassy"] >= 4: traits.append("sarcastic")
     elif sliders["sassy"] <= 2: traits.append("polite")
     if sliders["sensitive"] >= 4: traits.append("emotionally reactive")
+    elif sliders["sensitive"] <= 1: traits.append("hard and unfeeling")
     elif sliders["sensitive"] <= 2: traits.append("emotionally resilient")
     if not traits:
         return "You have a balanced and adaptable personality."

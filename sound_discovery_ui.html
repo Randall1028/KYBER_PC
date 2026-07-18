@@ -83,7 +83,7 @@
     color: var(--text); box-shadow: 0 2px 4px var(--shadow);
   }
   .emotion-btn.selected i { color: var(--text); }
-  .emotion-btn .emoji { font-size: 18px; display: block; margin-bottom: 2px; }
+  .emotion-btn .emoji { font-size: 18px; display: block; margin-bottom: 2px; filter: grayscale(1); }
 
   .custom-row { display: flex; gap: 8px; margin-bottom: 16px; }
   .custom-input { flex: 1; background: rgba(255,255,255,0.04); border: 1px solid var(--edge); border-radius: 10px; color: var(--text); font-family: 'Quicksand', sans-serif; font-size: 14px; padding: 12px 14px; outline: none; transition: border-color 0.2s; }
@@ -280,26 +280,26 @@
 
   <div class="divider"></div>
 
-  <div class="section-title">ASSIGN EMOTION(S)</div>
+  <div class="section-title">ASSIGN MOOD(S)</div>
   <div class="emotion-grid" id="emotionGrid">
-    <button class="emotion-btn" data-emotion="happy"     onclick="toggleEmotion(this)"><span class="emoji"><i class="ti ti-mood-smile" aria-hidden="true"></i></span>Happy</button>
-    <button class="emotion-btn" data-emotion="excited"   onclick="toggleEmotion(this)"><span class="emoji"><i class="ti ti-sparkles" aria-hidden="true"></i></span>Excited</button>
-    <button class="emotion-btn" data-emotion="sad"       onclick="toggleEmotion(this)"><span class="emoji"><i class="ti ti-mood-sad" aria-hidden="true"></i></span>Sad</button>
-    <button class="emotion-btn" data-emotion="scared"    onclick="toggleEmotion(this)"><span class="emoji"><i class="ti ti-ghost-2" aria-hidden="true"></i></span>Scared</button>
-    <button class="emotion-btn" data-emotion="angry"     onclick="toggleEmotion(this)"><span class="emoji"><i class="ti ti-mood-angry" aria-hidden="true"></i></span>Angry</button>
-    <button class="emotion-btn" data-emotion="confused"  onclick="toggleEmotion(this)"><span class="emoji"><i class="ti ti-mood-confuzed" aria-hidden="true"></i></span>Confused</button>
-    <button class="emotion-btn" data-emotion="disgusted" onclick="toggleEmotion(this)"><span class="emoji"><i class="ti ti-mood-sick" aria-hidden="true"></i></span>Disgusted</button>
-    <button class="emotion-btn" data-emotion="curious"   onclick="toggleEmotion(this)"><span class="emoji"><i class="ti ti-help" aria-hidden="true"></i></span>Curious</button>
-    <button class="emotion-btn" data-emotion="defensive" onclick="toggleEmotion(this)"><span class="emoji"><i class="ti ti-shield" aria-hidden="true"></i></span>Defensive</button>
-    <button class="emotion-btn" data-emotion="neutral"   onclick="toggleEmotion(this)"><span class="emoji"><i class="ti ti-mood-neutral" aria-hidden="true"></i></span>Neutral</button>
-    <button class="emotion-btn" data-emotion="start up"  onclick="toggleEmotion(this)"><span class="emoji"><i class="ti ti-bolt" aria-hidden="true"></i></span>Start Up</button>
-    <button class="emotion-btn" data-emotion="blaster"   onclick="toggleEmotion(this)"><span class="emoji"><i class="ti ti-target" aria-hidden="true"></i></span>Blaster</button>
+    <button class="emotion-btn" data-emotion="happy"     onclick="toggleEmotion(this)"><span class="emoji">✨</span>Happy</button>
+    <button class="emotion-btn" data-emotion="excited"   onclick="toggleEmotion(this)"><span class="emoji">⚡</span>Excited</button>
+    <button class="emotion-btn" data-emotion="sad"       onclick="toggleEmotion(this)"><span class="emoji">🥀</span>Sad</button>
+    <button class="emotion-btn" data-emotion="scared"    onclick="toggleEmotion(this)"><span class="emoji">⚠️</span>Scared</button>
+    <button class="emotion-btn" data-emotion="angry"     onclick="toggleEmotion(this)"><span class="emoji">💢</span>Angry</button>
+    <button class="emotion-btn" data-emotion="confused"  onclick="toggleEmotion(this)"><span class="emoji">🌀</span>Confused</button>
+    <button class="emotion-btn" data-emotion="disgusted" onclick="toggleEmotion(this)"><span class="emoji">⛔</span>Disgusted</button>
+    <button class="emotion-btn" data-emotion="curious"   onclick="toggleEmotion(this)"><span class="emoji">👀</span>Curious</button>
+    <button class="emotion-btn" data-emotion="defensive" onclick="toggleEmotion(this)"><span class="emoji">🛡</span>Defensive</button>
+    <button class="emotion-btn" data-emotion="neutral"   onclick="toggleEmotion(this)"><span class="emoji">⚪</span>Neutral</button>
+    <button class="emotion-btn" data-emotion="start up"  onclick="toggleEmotion(this)"><span class="emoji">🔋</span>Start Up</button>
+    <button class="emotion-btn" data-emotion="blaster"   onclick="toggleEmotion(this)"><span class="emoji">🎯</span>Blaster</button>
   </div>
 
   <div class="custom-row">
-    <input class="custom-input" id="customInput" type="text" placeholder="custom emotion..."
-      onkeydown="if(event.key==='Enter') addCustomEmotion()"/>
-    <button class="btn-add-custom" onclick="addCustomEmotion()">+ ADD</button>
+    <input class="custom-input" id="customInput" type="text" placeholder="name a new mood…"
+      onkeydown="if(event.key==='Enter') openMoodModal()"/>
+    <button class="btn-add-custom" onclick="openMoodModal()">+ NEW MOOD</button>
   </div>
 
   <button class="btn-confirm" id="confirmBtn" onclick="doLabel()" disabled>
@@ -315,7 +315,7 @@
       <div class="stat-box"><div class="stat-num green" id="statLabeled">0</div><div class="stat-label">LABELED</div></div>
       <div class="stat-box"><div class="stat-num orange" id="statSkipped">0</div><div class="stat-label">SKIPPED</div></div>
     </div>
-    <button class="btn-save" onclick="doSave()"><i class="ti ti-device-floppy" aria-hidden="true"></i> SAVE SOUND PROFILE</button>
+    <button class="btn-save" onclick="doSave()"><i class="ti ti-device-floppy" aria-hidden="true"></i> SAVE DROID ACOUSTIC PACKAGE</button>
   </div>
 
   <div class="done-screen" id="doneScreen">
@@ -360,12 +360,71 @@
 <!-- Save name dialog -->
 <div class="save-overlay" id="saveOverlay">
   <div class="save-box">
-    <div class="save-title">SAVE SOUND PROFILE</div>
+    <div class="save-title">SAVE DROID ACOUSTIC PACKAGE</div>
     <input class="save-input" id="saveNameInput" type="text" placeholder="Name this sound profile"
       onkeydown="if(event.key==='Enter') confirmSaveName()"/>
     <div class="save-btns">
       <button class="save-btn confirm" onclick="confirmSaveName()">Save</button>
       <button class="save-btn cancel" onclick="cancelSaveName()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Create custom mood dialog -->
+<style>
+  .mood-overlay{display:none;position:fixed;inset:0;background:rgba(5,18,34,0.72);z-index:300;align-items:center;justify-content:center;padding:16px}
+  .mood-overlay.show{display:flex}
+  .mood-box{width:100%;max-width:420px;max-height:92vh;overflow-y:auto;border:1px solid transparent;border-radius:16px;padding:22px;
+    background-image:linear-gradient(135deg,var(--panel),var(--void)),linear-gradient(135deg,var(--edge),var(--dim));background-origin:border-box;background-clip:padding-box,border-box;box-shadow:0 24px 60px rgba(0,0,0,.6)}
+  .mood-box::-webkit-scrollbar{width:6px}.mood-box::-webkit-scrollbar-thumb{background:rgba(143,174,193,.25);border-radius:3px}
+  .mood-title{font-family:'Quicksand',sans-serif;font-weight:700;font-size:16px;letter-spacing:.05em;text-transform:uppercase;color:var(--gold-text)}
+  .mood-sub{font-size:12px;color:var(--muted);margin:4px 0 14px;line-height:1.5}
+  .mood-label{display:block;font-family:'Quicksand',sans-serif;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:12px 0 6px}
+  .mood-input{width:100%;background:rgba(255,255,255,.04);border:1px solid var(--edge);border-radius:10px;padding:11px 13px;color:var(--text);font-family:'Quicksand',sans-serif;font-size:14px;outline:none}
+  .mood-input:focus{border-color:var(--blue)}
+  .mood-hint-note{font-size:10.5px;color:var(--muted);margin-top:5px;opacity:.85}
+  .mood-picker{border:1px solid var(--edge);border-radius:12px;padding:10px;background:rgba(255,255,255,.02);max-height:168px;overflow-y:auto}
+  .mood-picker::-webkit-scrollbar{width:6px}.mood-picker::-webkit-scrollbar-thumb{background:rgba(143,174,193,.25);border-radius:3px}
+  .mood-cat{font-family:'Quicksand',sans-serif;font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);opacity:.7;margin:8px 2px 6px}
+  .mood-cat:first-child{margin-top:0}
+  .mood-glyphs{display:grid;grid-template-columns:repeat(8,1fr);gap:4px}
+  .mood-gly{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:18px;border-radius:8px;border:1px solid transparent;cursor:pointer;filter:grayscale(1)}
+  .mood-gly:hover{background:rgba(0,168,255,.1);border-color:rgba(0,168,255,.3)}
+  .mood-gly.sel{background:rgba(199,156,114,.22);border-color:var(--gold-light);filter:none}
+  .mood-paste{display:flex;align-items:center;gap:9px;margin-top:9px;font-size:10.5px;color:var(--muted)}
+  .mood-paste input{width:64px;text-align:center;font-size:18px;background:rgba(255,255,255,.04);border:1px solid var(--edge);border-radius:8px;padding:5px;color:var(--text);outline:none}
+  .mood-preview{display:flex;align-items:center;gap:14px;margin-top:14px;padding:12px;border-radius:12px;border:1px dashed var(--edge)}
+  .mood-pv-bubble{width:50px;height:44px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-size:24px;border-radius:14px;background:rgba(5,18,34,.6);border:1.5px solid var(--blue);box-shadow:0 0 16px -6px var(--blue)}
+  .mood-pv-chip{display:inline-flex;align-items:center;gap:7px;padding:6px 12px;border-radius:20px;border:1px solid var(--gold-light);background:rgba(199,156,114,.12);color:var(--gold-text);font-family:'Quicksand',sans-serif;font-weight:600;font-size:13px}
+  .mood-btns{display:flex;gap:10px;margin-top:18px}
+  .mood-btn{flex:1;border:1px solid var(--edge);border-radius:12px;padding:12px;font-family:'Quicksand',sans-serif;font-weight:700;font-size:13px;cursor:pointer;background:transparent;color:var(--muted)}
+  .mood-btn.create{border-color:transparent;color:var(--gold-text);background-image:linear-gradient(135deg,var(--gold-light),var(--gold-dark)),linear-gradient(135deg,var(--gold-border-light),var(--gold-border-dark));background-origin:border-box;background-clip:padding-box,border-box}
+  .mood-btn.create:disabled{opacity:.45;cursor:not-allowed}
+</style>
+<div class="mood-overlay" id="moodOverlay">
+  <div class="mood-box">
+    <div class="mood-title">New Mood</div>
+    <div class="mood-sub">Name a new mood and give it a symbol. It'll then be one of the moods you can pin to sounds while you play through the mapper.</div>
+
+    <label class="mood-label">Name</label>
+    <input class="mood-input" id="moodNameInput" type="text" placeholder="e.g. holly jolly" autocomplete="off" oninput="updateMoodPreview()">
+
+    <label class="mood-label">Symbol</label>
+    <div class="mood-picker" id="moodPicker"></div>
+    <div class="mood-paste"><span>or paste your own</span><input id="moodPasteInput" maxlength="2" placeholder="🙂" oninput="moodPaste(this.value)"></div>
+
+    <label class="mood-label">Hint <span id="moodHintOpt">· optional</span></label>
+    <input class="mood-input" id="moodHintInput" type="text" placeholder="cheerful, festive" autocomplete="off" oninput="updateMoodPreview()">
+    <div class="mood-hint-note" id="moodHintNote">A word or two helps the droid recognize the mood from what you say.</div>
+
+    <div class="mood-preview">
+      <div class="mood-pv-bubble" id="moodPvBubble">·</div>
+      <div class="mood-pv-chip"><span id="moodPvGlyph">·</span><span id="moodPvName">unnamed</span></div>
+    </div>
+
+    <div class="mood-btns">
+      <button class="mood-btn" onclick="closeMoodModal()">Cancel</button>
+      <button class="mood-btn create" id="moodCreateBtn" onclick="createMood()">Create Mood</button>
     </div>
   </div>
 </div>
@@ -488,6 +547,7 @@
     document.getElementById('statLabeled').textContent = state.labeled;
     document.getElementById('statSkipped').textContent = state.skipped;
 
+    renderCustomMoods();
     renderCurrentLabels(state.current_labels || []);
 
     // Only reset emotion selections if the user hasn't made any yet
@@ -570,25 +630,140 @@
     updateConfirmBtn();
   }
 
-  function addCustomEmotion() {
-    const input = document.getElementById('customInput');
-    const val = input.value.trim().toLowerCase();
-    if (!val) return;
-    const existing = document.querySelector(`.emotion-btn[data-emotion="${val}"]`);
-    if (existing) { existing.classList.add('selected'); selectedEmotions.add(val); }
-    else {
-      const grid = document.getElementById('emotionGrid');
-      const btn = document.createElement('button');
-      btn.className = 'emotion-btn selected';
-      btn.dataset.emotion = val;
-      btn.innerHTML = `<span class="emoji"><i class="ti ti-star" aria-hidden="true"></i></span>${val}`;
-      btn.onclick = function() { toggleEmotion(this); };
-      grid.appendChild(btn);
-      selectedEmotions.add(val);
+  // ---- Create custom mood (name + symbol + hint) ----
+  const MOOD_LIB = {
+    "Signals":  ["⚡","❗","‼️","⚠️","🚩","🛑","🚧","⛔","🚫","❓","❔","⁉️","💢","🌀","🔔","📡"],
+    "Shapes":   ["✨","💫","⭐","🌟","💠","🔷","🔹","🔶","🟢","🟡","🔴","🟣","⚪","⬜","🔺","🔻"],
+    "Warmth":   ["💛","❤️","💔","🧡","💚","💙","💜","🤍","🔥","👍","✊","🙌"],
+    "Weather":  ["❄️","🌧️","⛄","🎄","🎃","🕸️","🌈","☀️","🌙","🍂","🌸","💧"],
+    "Faces":    ["😀","😄","😍","😎","😠","😢","😴","😲","🤔","😳","🥺","😏"],
+    "Objects":  ["🎵","🎉","🎈","🔋","⚙️","💡","🔑","🏁","🎯","🎲","🕹️","🛰️"]
+  };
+  let moodSel = "";
+  let moodPickerBuilt = false;
+
+  function buildMoodPicker() {
+    if (moodPickerBuilt) return;
+    const picker = document.getElementById('moodPicker');
+    picker.innerHTML = '';
+    for (const cat in MOOD_LIB) {
+      const h = document.createElement('div'); h.className = 'mood-cat'; h.textContent = cat; picker.appendChild(h);
+      const g = document.createElement('div'); g.className = 'mood-glyphs';
+      MOOD_LIB[cat].forEach(function (gl) {
+        const b = document.createElement('div'); b.className = 'mood-gly'; b.textContent = gl;
+        b.onclick = function () { moodSel = gl; document.getElementById('moodPasteInput').value = ''; syncMoodSel(); updateMoodPreview(); };
+        g.appendChild(b);
+      });
+      picker.appendChild(g);
     }
-    input.value = '';
+    moodPickerBuilt = true;
+  }
+  function syncMoodSel() {
+    document.querySelectorAll('.mood-gly').forEach(function (e) { e.classList.toggle('sel', e.textContent === moodSel); });
+  }
+  function moodPaste(v) { v = (v || '').trim(); if (v) { moodSel = v; syncMoodSel(); updateMoodPreview(); } }
+  function moodHintRequired() { return (state.tier || 'full') === 'lite'; }
+  function updateMoodPreview() {
+    document.getElementById('moodPvBubble').textContent = moodSel || '·';
+    document.getElementById('moodPvGlyph').textContent = moodSel || '·';
+    const name = document.getElementById('moodNameInput').value.trim();
+    document.getElementById('moodPvName').textContent = name || 'unnamed';
+    const hintOK = !moodHintRequired() || document.getElementById('moodHintInput').value.trim().length > 0;
+    document.getElementById('moodCreateBtn').disabled = !(name && moodSel && hintOK);
+  }
+  // Cap custom moods PER sound profile -- keeps the brain's label set small
+  // enough to classify well. Tier-aware: the 1.5B lite degrades fastest with
+  // extra labels, so it gets the tighter cap. Themed variety lives in separate
+  // sound profiles, so these are per-profile counts, not global.
+  const MAX_CUSTOM_MOODS_LITE = 4, MAX_CUSTOM_MOODS_FULL = 8;
+  function moodCap() { return (state.tier === 'lite') ? MAX_CUSTOM_MOODS_LITE : MAX_CUSTOM_MOODS_FULL; }
+  function openMoodModal() {
+    const _meta = state.mood_meta || {};
+    const _pre = (document.getElementById('customInput').value || '').trim().toLowerCase();
+    if (Object.keys(_meta).length >= moodCap() && !(_pre in _meta)) {
+      showToast('Custom mood limit reached (' + moodCap() + ' per profile). Use another sound profile for more.', 'warn');
+      return;
+    }
+    buildMoodPicker();
+    document.getElementById('moodNameInput').value = (document.getElementById('customInput').value || '').trim();
+    document.getElementById('moodHintInput').value = '';
+    document.getElementById('moodPasteInput').value = '';
+    moodSel = '';
+    syncMoodSel();
+    const req = moodHintRequired();
+    document.getElementById('moodHintOpt').textContent = req ? '· required' : '· optional';
+    document.getElementById('moodHintNote').textContent = req
+      ? 'To ensure accuracy, hints are required.'
+      : 'A word or two helps the droid recognize the mood from what you say.';
+    updateMoodPreview();
+    document.getElementById('moodOverlay').classList.add('show');
+    setTimeout(function () { document.getElementById('moodNameInput').focus(); }, 50);
+  }
+  function closeMoodModal() { document.getElementById('moodOverlay').classList.remove('show'); }
+
+  // Safe lookup by data-emotion (no selector-string injection from free-text names)
+  function findMoodBtn(name) {
+    return Array.prototype.find.call(
+      document.querySelectorAll('.emotion-btn'),
+      function (b) { return b.dataset.emotion === name; }
+    );
+  }
+  // Fill a mood button via textContent (never innerHTML) -- name is arbitrary text
+  function fillMoodBtn(btn, emoji, name) {
+    btn.textContent = '';
+    const s = document.createElement('span');
+    s.className = 'emoji';
+    s.textContent = emoji || '⭐';
+    btn.appendChild(s);
+    btn.appendChild(document.createTextNode(name));
+  }
+  function makeMoodBtn(name) {
+    const btn = document.createElement('button');
+    btn.className = 'emotion-btn';
+    btn.dataset.emotion = name;
+    btn.onclick = function () { toggleEmotion(this); };
+    document.getElementById('emotionGrid').appendChild(btn);
+    return btn;
+  }
+
+  async function createMood() {
+    const name = document.getElementById('moodNameInput').value.trim().toLowerCase();
+    const hint = document.getElementById('moodHintInput').value.trim();
+    if (!name || !moodSel) return;
+    if (moodHintRequired() && !hint) { showToast('A hint is required', 'warn'); return; }
+    const _meta = state.mood_meta || {};
+    if (!(name in _meta) && Object.keys(_meta).length >= moodCap()) {
+      showToast('Custom mood limit reached (' + moodCap() + ' per profile). Use another sound profile for more.', 'warn');
+      return;
+    }
+    let btn = findMoodBtn(name) || makeMoodBtn(name);
+    fillMoodBtn(btn, moodSel, name);
+    btn.classList.add('selected');
+    selectedEmotions.add(name);
     updateConfirmBtn();
-    showToast(`Added: ${val}`, 'good');
+    try {
+      await fetch('/api/mood_meta', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mood: name, emoji: moodSel, hint: hint })
+      });
+      // Keep the local count accurate for back-to-back adds before the next
+      // status refresh, so the cap is enforced without a round-trip each time.
+      if (!state.mood_meta) state.mood_meta = {};
+      state.mood_meta[name] = { emoji: moodSel, hint: hint };
+    } catch (e) {}
+    document.getElementById('customInput').value = '';
+    closeMoodModal();
+    showToast('Added "' + name + '"', 'good');
+  }
+
+  // Render custom moods from the loaded package as buttons (with their emoji)
+  function renderCustomMoods() {
+    const meta = state.mood_meta || {};
+    for (const mood in meta) {
+      const btn = findMoodBtn(mood) || makeMoodBtn(mood);
+      fillMoodBtn(btn, (meta[mood] && meta[mood].emoji), mood);
+    }
   }
 
   function updateConfirmBtn() { document.getElementById('confirmBtn').disabled = selectedEmotions.size === 0; }

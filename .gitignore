@@ -41,7 +41,9 @@ claim_connect_result.json
 activation_result.json
 
 # --- Local rollback backups (kept on disk, not in the repo) ---
-_backup_pre_tier/
+# Glob so ANY _backup_* folder is ignored (e.g. _backup_pre_promptfix/), not
+# just the original _backup_pre_tier/ — no rollback copy ever lands in the repo.
+_backup_*/
 
 # --- OS / editor cruft ---
 .DS_Store

@@ -6,15 +6,17 @@ KYBER turns your Droid Depot droid into a voice-driven companion: it listens, ta
 
 This is a hobbyist build for the *Star Wars* fan/maker community. It's free, and it's meant to stay that way (see [License](#license)).
 
-> ⚠️ **Beta (v0.85.5).** The Windows edition is a fresh port, now in beta testing. It runs end to end, but you may hit rough edges, so bug reports are welcome (see [Feedback & bugs](#feedback--bugs)).
+> ⚠️ **Beta (v0.87.0).** The Windows edition is a fresh port, now in beta testing. It runs end to end, but you may hit rough edges, so bug reports are welcome (see [Feedback & bugs](#feedback--bugs)).
 
 ---
 
 ## What it does
 
 - **Real conversation:** a persistent voice pipeline (wake-free listening, voice-activity detection, local speech-to-text, and a local LLM that produces both the reply and a live emotion read) drives everything else.
+- **Com Uplink:** a live read on what your droid is hearing and feeling. A quiet dock sits at the bottom of every screen showing its current mood; tap it and it opens into a running log of what the droid *heard* (your words) and what it *said back* (an emoji reaction).
 - **A personality you control:** five trait sliders (brave, curious, sassy, playful, sensitive) shape how your droid talks, independent of which sound bank it plays from.
 - **Built-in character personalities:** ready-to-use profiles for **R2-D2, BB-8, Chopper, and BD-1**, tuned to match each character, plus five blank neutral slots you can build out yourself.
+- **Custom moods:** beyond the built-in emotions, invent your own moods (a name and an emoji), map sounds to them, and the droid will learn to feel them — tell it *"I'm feeling holly jolly"* and it'll play whatever you tagged to that mood. Groundwork for seasonal and themed sound profiles.
 - **Chassis-aware movement:** R, BB, C, A, and BD chassis each get appropriately scaled motor behavior for every gesture.
 - **A calibration wizard:** a user-feedback method for tuning gesture timing, so the droid can compensate for lower battery levels.
 - **Autonomous modes**, triggered by voice (see [Voice commands](#talking-to-your-droid-voice-commands-beta) below):

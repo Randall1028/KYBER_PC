@@ -37,7 +37,7 @@ import time
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from config import ENV_PATH, MAP_DIR
+from config import ENV_PATH, MAP_DIR, active_tier
 
 PORT = 5000
 KYBER_CORE_STATUS_PORT = 5010  # must match kyber_core.py's own STATUS_PORT
@@ -81,6 +81,17 @@ for _bank_id, _info in RUNIT_BANKS.items():
 current_index = 0
 labels = {}
 skipped = set()
+mood_meta = {}   # {mood: {"emoji": str, "hint": str}} -- per-mood symbol + hint for custom moods
+MAX_CUSTOM_MOODS_LITE = 4   # cap per sound profile (v0.86.1), tier-aware: too
+MAX_CUSTOM_MOODS_FULL = 8   # many custom labels degrade the brain's
+                            # classification, worst on the 1.5B lite, so it gets
+                            # the tighter cap. Themed variety is meant to live in
+                            # separate profiles, so these are PER-profile counts,
+                            # not global.
+
+
+def _custom_mood_cap():
+    return MAX_CUSTOM_MOODS_LITE if active_tier() == "lite" else MAX_CUSTOM_MOODS_FULL
 session_deadline = time.time() + SESSION_TIMEOUT_SECONDS
 _lock = threading.Lock()
 
@@ -133,7 +144,7 @@ def write_sound_profile_name(slot: int, name: str):
 
 
 def load_progress():
-    global labels, skipped, current_index
+    global labels, skipped, current_index, mood_meta
     save_path = get_save_path()
     if os.path.exists(save_path):
         with open(save_path) as f:
@@ -145,12 +156,14 @@ def load_progress():
         else:
             labels = {}
         skipped = set(data.get("skipped", []))
+        mood_meta = data.get("mood_meta", {}) or {}
         current_index = 0  # always start at the beginning
         print(f"Loaded sound profile {get_active_sound_profile()}: "
               f"{len(labels)} labeled, {len(skipped)} skipped", flush=True)
     else:
         labels = {}
         skipped = set()
+        mood_meta = {}
         current_index = 0
         print(f"Starting fresh -- sound profile {get_active_sound_profile()}", flush=True)
 
@@ -181,6 +194,7 @@ def save_progress():
         "current_index": current_index,
         "emotion_to_sounds": emotion_map,
         "sound_to_emotions": labels,
+        "mood_meta": mood_meta,
         "skipped": list(skipped),
         "stats": {"total": len(SOUND_LIST), "labeled": len(labels), "skipped": len(skipped)},
     })
@@ -275,6 +289,8 @@ class MapperHandler(BaseHTTPRequestHandler):
                 "done": current_index >= len(SOUND_LIST),
                 "sound_profile": sound_profile,
                 "name": read_sound_profile_name(sound_profile),
+                "tier": active_tier(),
+                "mood_meta": mood_meta,
                 "timeout_remaining": get_timeout_remaining(),
             })
             return
@@ -332,6 +348,26 @@ class MapperHandler(BaseHTTPRequestHandler):
                 self._json({"ok": True, "labeled": key, "emotions": emotion_list})
             else:
                 self._json({"ok": False, "reason": "no emotions provided"})
+            return
+
+        if self.path == "/api/mood_meta":
+            data = self._read_json_body()
+            mood = (data.get("mood") or "").strip().lower()
+            _cap = _custom_mood_cap()
+            if not mood:
+                self._json({"ok": False, "reason": "no mood name"})
+            elif mood not in mood_meta and len(mood_meta) >= _cap:
+                # Hard cap (tier-aware). Editing an existing mood is always
+                # allowed; only a NEW mood beyond the cap is rejected (the UI
+                # blocks this too, but the server is the source of truth).
+                self._json({"ok": False, "reason": "cap", "max": _cap})
+            else:
+                mood_meta[mood] = {
+                    "emoji": (data.get("emoji") or "").strip(),
+                    "hint": (data.get("hint") or "").strip(),
+                }
+                save_progress()
+                self._json({"ok": True, "mood": mood, "meta": mood_meta[mood]})
             return
 
         if self.path == "/api/jump":

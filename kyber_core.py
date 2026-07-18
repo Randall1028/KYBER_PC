@@ -58,6 +58,7 @@ import multiprocessing
 import os
 import queue
 import random
+import re
 import sys
 import threading
 import time
@@ -311,11 +312,51 @@ def load_whisper_model() -> WhisperModel:
     return model
 
 
+# Caption-style phrases Whisper invents to fill silence/noise -- it's seen a
+# lifetime of YouTube subtitles. These are never real speech to a droid, so
+# they're dropped outright. Ambiguous short fillers ("thanks", "you", "bye")
+# are NOT listed here on purpose; the per-segment confidence gate below catches
+# those when they're hallucinated, without eating them when actually spoken.
+_HALLUCINATION_MARKERS = (
+    "thank you for watching", "thanks for watching", "see you in the next video",
+    "see you next time", "please subscribe", "like and subscribe",
+    "dont forget to subscribe", "subtitles by", "amara org",
+)
+
+
+def _normalize_for_hallucination(text: str) -> str:
+    """Lowercase, keep only alphanumerics + spaces, collapse whitespace."""
+    kept = "".join(c if (c.isalnum() or c.isspace()) else " " for c in text.lower())
+    return " ".join(kept.split())
+
+
+def _looks_like_hallucination(text: str) -> bool:
+    n = _normalize_for_hallucination(text)
+    if not n:
+        return True
+    return any(marker in n for marker in _HALLUCINATION_MARKERS)
+
+
 def transcribe_segment(model: WhisperModel, audio_segment: np.ndarray):
     audio_float = audio_segment.astype(np.float32) / 32768.0
     start = time.time()
-    segments, info = model.transcribe(audio_float, language="en", vad_filter=True, beam_size=5)
-    text = " ".join(seg.text.strip() for seg in segments).strip()
+    segments, info = model.transcribe(
+        audio_float, language="en", vad_filter=True, beam_size=5,
+        # Don't let a hallucinated line seed the decode of the next one --
+        # that's what turns a single stray "thank you" into a runaway caption.
+        condition_on_previous_text=False,
+    )
+    parts = []
+    for seg in segments:
+        # Whisper's own probability that this chunk is NOT speech. A high value
+        # is exactly when it invents caption text on near-silence, so drop the
+        # segment. Real speech scores low here, so genuine short words survive.
+        if getattr(seg, "no_speech_prob", 0.0) > 0.6:
+            continue
+        parts.append(seg.text.strip())
+    text = " ".join(p for p in parts if p).strip()
+    if _looks_like_hallucination(text):
+        text = ""
     elapsed = time.time() - start
     return text, elapsed
 
@@ -345,6 +386,87 @@ VALID_EMOTIONS = [
     "disgusted", "curious", "confused", "defensive", "neutral",
 ]
 
+# Sound-category tags that live in an Acoustic Package but are NOT moods the
+# brain should ever classify into -- they're sound buckets, not feelings.
+NON_MOOD_TAGS = {"start up", "blaster", "thruster", "motor"}
+
+
+def _active_profile_data() -> dict:
+    """Read the active Acoustic Package (sound_profile_N.json) fresh, or {}."""
+    from dotenv import dotenv_values as _dv
+    slot = _dv(ENV_PATH).get("ACTIVE_SOUND_PROFILE", "1")
+    path = os.path.join(MAP_DIR, f"sound_profile_{slot}.json")
+    if os.path.exists(path):
+        try:
+            with open(path) as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+
+def active_mood_meta() -> dict:
+    """{mood: {'emoji': str, 'hint': str}} for custom moods in the active
+    package. Built-in moods get their emoji from the app palette, not here."""
+    return _active_profile_data().get("mood_meta", {}) or {}
+
+
+def active_moods() -> list:
+    """Moods the classifier may pick from: the 10 built-ins plus any custom
+    moods in the active package that actually have sounds tagged, minus the
+    non-mood sound tags. Built-ins first, customs appended. A mood created but
+    not yet pinned to any sound is intentionally NOT offered -- classifying
+    into it would only fall back to neutral audio, a silent mismatch."""
+    data = _active_profile_data()
+    keys = set(data.get("emotion_to_sounds", {}).keys())
+    customs = sorted(k for k in keys if k not in VALID_EMOTIONS and k not in NON_MOOD_TAGS)
+    return VALID_EMOTIONS + customs
+
+
+def _mood_list_for_prompt() -> str:
+    """Comma-joined mood list for the prompt; custom moods get their hint
+    appended in parens to steer the model (matters most on the Lite 1.5B)."""
+    meta = active_mood_meta()
+    parts = []
+    for m in active_moods():
+        hint = "" if m in VALID_EMOTIONS else ((meta.get(m) or {}).get("hint") or "").strip()
+        parts.append(f"{m} ({hint})" if hint else m)
+    return ", ".join(parts)
+
+
+def _match_mood(raw: str):
+    """Parse the model's reply into one active mood, or None. Order matters:
+    exact match, then multi-word moods matched as a CONSECUTIVE RUN OF TOKENS
+    (so 'happy holidays' beats 'happy', and 'on edge' can't match inside
+    'moon edge'), then a single-word mood -- the FIRST token if it's a mood,
+    else the first mood token anywhere in the reply.
+
+    That last fallback keeps a stray leading token from glitching an otherwise
+    valid answer: with the `->`-primed format the model replies with a bare
+    label, but if it ever echoes the arrow or a prefix ('-> sad', 'Mood: sad')
+    the label is still the first recognizable mood word, so we take it rather
+    than signal a false glitch. Punctuation and the arrow are stripped per
+    token so 'sad.' / '->sad' still match."""
+    if not raw:
+        return None
+    cleaned = raw.lower().strip().strip(".,!?\"'")
+    moods = active_moods()
+    if cleaned in moods:                                   # exact (single or multi-word)
+        return cleaned
+    tokens = [t.strip(".,!?\"'>-→") for t in cleaned.split()]
+    for m in sorted((x for x in moods if " " in x),
+                    key=lambda s: len(s.split()), reverse=True):
+        mt = m.split()
+        for i in range(len(tokens) - len(mt) + 1):
+            if tokens[i:i + len(mt)] == mt:                # word-boundary-safe run
+                return m
+    if tokens and tokens[0] in moods:                      # single-word mood, preferred position
+        return tokens[0]
+    for tok in tokens:                                     # else first mood word anywhere
+        if tok in moods:
+            return tok
+    return None
+
 
 def _load_fresh_personality_traits() -> dict:
     """Re-reads ACTIVE_PERSONALITY from .env fresh, rather than trusting
@@ -368,59 +490,177 @@ def _load_fresh_personality_traits() -> dict:
     return defaults
 
 
-def _build_system_prompt() -> str:
+def _canon_droid(name):
+    """Detect a canon celebrity droid from the user's designation, allowing
+    common spellings (R2, R2-D2, Artoo, Artoo Deetoo; BB-8, BeeBee Eight;
+    Chopper, C1-10P; BD-1). Returns the canonical character name, or None for an
+    original/custom droid (which stays faction-agnostic)."""
+    n = "".join(c for c in (name or "").lower() if c.isalnum())
+    if not n:
+        return None
+    if n.startswith("r2") or "artoo" in n:
+        return "R2-D2"
+    if n.startswith("bb8") or n == "bb" or "beebee" in n:
+        return "BB-8"
+    if "chopper" in n or n == "chop" or n == "c110p":
+        return "Chopper (C1-10P)"
+    if n.startswith("bd1") or n == "bd" or n == "bdone" or "beedee" in n:
+        return "BD-1"
+    return None
+
+
+# Canon villains a good-guy canon droid (R2/BB-8/Chopper/BD-1) treats as enemies.
+# The 4B model KNOWS these are villains when asked directly -- but under the
+# split-second single-token emotion call, especially inside an excited "we'll see
+# X" stream, it doesn't reliably APPLY that (Kylo Ren is the worst offender: he
+# carries a lot of competing "complex / redeemed / Ben Solo" association). So when
+# an enemy is NAMED in the current line and the droid is canon, we drop the fact
+# right on the decision line (see _build_chat_messages). This is strictly
+# PER-LINE: a line that names no enemy gets nothing, so it can never bleed
+# 'scared' into unrelated lines the way the system-prompt roster did. We give the
+# model the FACT (X is an enemy), not the feeling -- so it still reasons the
+# situation (enemy arriving -> wary; enemy defeated -> triumphant).
+_CANON_ENEMY_NAMES = [
+    "darth vader", "kylo ren", "emperor palpatine", "darth sidious",
+    "darth maul", "general grievous", "general hux", "captain phasma",
+    "the first order", "first order", "stormtroopers", "stormtrooper",
+    "the empire", "galactic empire", "inquisitors", "inquisitor",
+    "vader", "kylo", "palpatine", "sidious", "grievous", "hux", "phasma",
+    "the sith", "sith lord",
+]
+_ENEMY_RE = re.compile(
+    r"\b(" + "|".join(re.escape(nm) for nm in _CANON_ENEMY_NAMES) + r")\b", re.I)
+
+
+def _named_enemy(text: str):
+    """The canon villain named in this line (original casing), or None. Longer
+    names are listed first so 'Kylo Ren' wins over bare 'Kylo'."""
+    m = _ENEMY_RE.search(text or "")
+    return m.group(1) if m else None
+
+
+def _build_system_prompt(momentum_line: str = "") -> str:
     """Rebuilt fresh on every query rather than a frozen module-level
     constant -- the actual fix for Save Settings not adopting a new
     personality. No live-push endpoint needed (unlike Calibration's
     /calibration_set): since this is read fresh each time anyway, there's
-    nothing to push."""
-    personality_block = build_personality_block(_load_fresh_personality_traits())
-    return f"""You are Star Wars droid {DROID_NAME}. Respond with ONE word showing how you feel about what was just said.
+    nothing to push.
 
-You are as loyal to your User as R2-D2 is to Luke Skywalker or BB-8 is to Poe Dameron.
+    momentum_line is a transient, per-turn soft prior describing the feeling
+    still lingering from the previous turn (see _momentum_line). It ALWAYS
+    yields to a clear new feeling -- it only colors calm/ambiguous lines -- so
+    a scared droid that's then reassured reads happy immediately, not stale."""
+    from dotenv import dotenv_values as _dv
+    droid_name = _dv(ENV_PATH).get("DROID_NAME", "") or "your droid"
+    personality_block = build_personality_block(_load_fresh_personality_traits())
+    mood_list = _mood_list_for_prompt()
+    # Canon celebrities (detected from the droid's NAME -- R2/R2-D2/Artoo, BB-8/
+    # BeeBee Eight, Chopper, BD-1 and common spellings) stay true to their Star
+    # Wars selves. An original/custom name gets NO faction or lore lean at all --
+    # it reacts by temperament + the situation, so a villain or Imperial build is
+    # never force-fed the good-guy bias. Also keeps the prompt lean.
+    canon = _canon_droid(droid_name)
+    canon_line = ""
+    if canon:
+        # Canon droids not only HOLD their allegiances, they react from them --
+        # a named ally warms them, a named enemy alarms them -- even when the
+        # name is only mentioned. Kept inside the canon branch so custom/villain
+        # builds still get zero faction lean.
+        canon_line = (
+            "\nYou are " + canon + " -- a canon Star Wars droid. Stay true to "
+            "your character: your loyalties, allies, and enemies are exactly as "
+            "they are across all Star Wars films, series, and games. React from "
+            "that allegiance even when a name is only mentioned -- warmth, "
+            "delight, or excitement toward your friends and allies; wariness, "
+            "fear, or anger toward your enemies. Running into or meeting one of "
+            "your enemies is never exciting or fun to you, however casually the "
+            "plan is framed.\n"
+        )
+    return f"""You are Star Wars droid {droid_name}. You feel one clear emotion in response to what your User says, and you answer with the single label for that feeling.
+{canon_line}
+You are fiercely loyal to your User and bonded to them as your own -- they are your person, and you are devoted to them above all.
+You know both worlds equally well -- the Star Wars galaxy and real-world Earth (its people, places, food, music, and pop culture). A reference to either is familiar to you, never confusing.
 
 {personality_block}
 
-You have deep knowledge of both the Star Wars universe and the real world. You are never wishy-washy — you always have a strong reaction.
+You always have a strong reaction -- never wishy-washy.
+{momentum_line}
+Here is what each feeling MEANS. Pick the one whose meaning best fits how you feel:
+- happy — warmth, affection, joy; being pleased, glad, or touched; good news; a fond reunion.
+- excited — thrill and eager delight; something fun, awesome, or anticipated (a trick to perform, a trip, a favorite ship or ally on the way).
+- sad — loss, grief, loneliness, disappointment, bad news, or being left out, rejected, or excluded; sympathy for anyone or anything hurt, forgotten, abandoned, unwanted, or thrown away; a hope that fell through.
+- angry — being insulted, wronged, betrayed, mocked, provoked, abandoned, or treated unfairly; the urge to strike back or stand up for yourself and your own.
+- scared — a real, immediate physical danger or attack from an OUTSIDE threat, or a dreaded enemy near or on the way. This is fear for your safety. Being left behind, abandoned, ditched, forgotten, replaced, or excluded is NEVER scared -- even when being alone sounds risky, that hurt is sad or angry. Bad news, disappointment, and being scolded are also sad or angry, not scared.
+- disgusted — revulsion or distaste; something gross, sickening, wrong, or beneath you.
+- curious — genuine intrigue: a mystery, puzzle, or novelty that makes you want to investigate. NOT a fallback for a calm or unclear remark, and separate from your curious temperament.
+- confused — ONLY when the User themselves is confused or says something self-contradictory; NEVER your own uncertainty about how to react.
+- defensive — bracing to protect yourself or your User; standing your ground against blame, doubt, or a challenge.
+- neutral — ordinary small talk, or an empty fragment that genuinely carries no feeling.
 
-Reply with ONLY one word from: {', '.join(VALID_EMOTIONS)}
+The complete set of labels you may answer with (copy ONE exactly, even if it is more than one word): {mood_list}
 
-Guidelines — read the CONTENT and intent, not just the form of the sentence:
+To decide: work out what your User really MEANS and the mood of the whole exchange, then choose the single label whose meaning best matches how YOU feel about their latest line -- shaped by your personality above (a cold droid meets praise with indifference; a sensitive one takes criticism hard; a bold one isn't easily scared). React to the meaning, not the grammar: a calm sentence, a question, or an unfamiliar Earth reference is never itself a reason to fall back on neutral, curious, or confused. Answer with ONLY that one label, nothing else.
 
-- Greetings, small talk -> neutral or curious
-- Praise, compliments, good news -> happy or excited
-- Asking how you feel or what you think about something you like -> happy or excited
-- Asking how you feel or what you think about something you dislike -> disgusted or angry
-- Criticism, insults directed at you -> angry or defensive
-- Threats, danger, warnings -> scared or defensive or angry
-- Bad news, loss, disappointment -> sad
-- Something genuinely puzzling or unknown -> curious
-- Only use confused when the speech itself expresses confusion
-- Incomplete fragments with no clear meaning -> neutral
-- Never default to neutral or curious just because something is phrased as a question
-- Requests for a fun physical trick or performance (twirl, dance, spin, show off) -> happy or excited, never a word outside the list like "playful"
+Examples -- you react to the LAST line; the "→" is followed by your one-word answer:
+The User just said: "Show us your best barrel roll!"
+→ excited
 
-Examples of that last rule in practice -- a direct question about your own feelings toward something still gets a real feeling, not a dodge:
-User: "Are you excited for the World Cup?" -> excited
-User: "You happy that's happening?" -> happy
-User: "Do you like pineapple on pizza?" -> disgusted
-User: "Give us a twirl" -> excited
-User: "Do a little dance for us" -> happy
+Conversation so far:
+User: "That cargo droid hauled crates for us for years."
+The User just said: "They finally sent the poor thing off to the scrap heap."
+→ sad
+
+The User just said: "The whole mission just got called off."
+→ sad
+
+The User just said: "Your worst enemy is right outside, coming for us."
+→ scared
+
+The User just said: "North? No -- south. Actually, I have no idea which way to go."
+→ confused
+
+The User just said: "I couldn't ask for a better companion than you."
+→ happy
 """
+def _build_chat_messages(text: str, history: deque, momentum_line: str = "") -> list:
+    """Assemble the exact request. The recent conversation is presented as the
+    conversation the droid is actually IN (so cumulative mood is FELT, e.g. the
+    lead-up that makes a flat line land as sad), and the current line is clearly
+    marked as the one to react to. The whole thing mirrors the format of the
+    examples in the system prompt -- a short transcript ending in `→` -- so the
+    model completes it with one label the same way it saw them demonstrated.
 
-
-def _build_chat_messages(text: str, history: deque) -> list:
-    messages = [{"role": "system", "content": _build_system_prompt()}]
-    for past_text, past_emotion in history:
-        messages.append({"role": "user", "content": past_text})
-        messages.append({"role": "assistant", "content": past_emotion})
-    messages.append({"role": "user", "content": text})
+    Two deliberate choices: (1) the droid's OWN past emotion labels are NOT
+    replayed as assistant turns (that caused a curious/confused snowball at
+    temperature 0); only the User's prior lines carry over, as context. (2) the
+    trailing `→` primes a bare label, matching the examples' `→ <label>` shape."""
+    messages = [{"role": "system", "content": _build_system_prompt(momentum_line)}]
+    recent = [past_text for past_text, _past_emotion in history if past_text]
+    lines = []
+    if recent:
+        lines.append("Conversation so far:")
+        lines.extend(f'User: "{t}"' for t in recent)
+    lines.append(f'The User just said: "{text}"')
+    # Per-line enemy fact: only for canon droids, only when THIS line names a
+    # canon villain. Hands the model the allegiance it knows but doesn't reliably
+    # apply mid-conversation (see _CANON_ENEMY_NAMES). Stated as a fact, not a
+    # feeling, so the model still reads the situation (arriving -> wary, defeated
+    # -> triumphant). Lines with no enemy get nothing -> no 'scared' bleed.
+    from dotenv import dotenv_values as _dv
+    if _canon_droid(_dv(ENV_PATH).get("DROID_NAME", "")):
+        enemy = _named_enemy(text)
+        if enemy:
+            lines.append(f"(Note: {enemy} is one of your enemies -- a threat "
+                         "to you and your User, never a friend.)")
+    lines.append("→")  # → : primes the one-word answer, matching the examples
+    messages.append({"role": "user", "content": "\n".join(lines)})
     return messages
 
 
-def _get_emotion_qwen_raw(text: str, history: deque) -> str:
-    messages = _build_chat_messages(text, history)
-    print("[QWEN]: waiting on a response...", flush=True)
+def _get_emotion_qwen_raw(text: str, history: deque, momentum_line: str = "",
+                          temperature: float = 0.0) -> str:
+    messages = _build_chat_messages(text, history, momentum_line)
+    print(f"[QWEN]: waiting on a response... (temp={temperature})", flush=True)
     start = time.time()
     response = requests.post(
         OLLAMA_URL,
@@ -430,9 +670,16 @@ def _get_emotion_qwen_raw(text: str, history: deque) -> str:
             "stream": False,
             "keep_alive": "30m",
             "options": {
-                "temperature": 0.0,
-                "num_predict": 10,
-                "num_ctx": 1024,
+                # temperature is per-attempt: greedy (0.0) first for a stable,
+                # correct read; a nonzero value on retry so a malformed reply
+                # actually gets a DIFFERENT sample instead of the identical
+                # deterministic one (the old retry re-issued the same greedy
+                # request and could never recover a parse failure). num_predict
+                # has a little headroom so a one-word label prefixed by a stray
+                # token ("Mood: happy") isn't truncated before it parses.
+                "temperature": temperature,
+                "num_predict": 24,
+                "num_ctx": 2048,
             },
         },
         timeout=30,
@@ -456,13 +703,17 @@ def _get_emotion_qwen_raw(text: str, history: deque) -> str:
     return data.get("message", {}).get("content", "").strip()
 
 
-def get_emotion_test(text: str, history: deque = None):
+def get_emotion_test(text: str, history: deque = None, momentum_line: str = ""):
     if history is None:
         history = deque(maxlen=HISTORY_LENGTH)
 
     for attempt in range(2):
+        # Greedy first pass; if it comes back empty or unparseable, the retry
+        # samples with a little temperature so it's a genuinely fresh attempt
+        # rather than a byte-identical re-run of the same greedy decode.
+        temperature = 0.0 if attempt == 0 else 0.5
         try:
-            raw = _get_emotion_qwen_raw(text, history)
+            raw = _get_emotion_qwen_raw(text, history, momentum_line, temperature)
         except requests.exceptions.ConnectionError:
             print("[QWEN ERROR]: Could not reach Ollama -- is it running?", flush=True)
             return None
@@ -476,8 +727,8 @@ def get_emotion_test(text: str, history: deque = None):
         if not raw:
             continue
 
-        emotion = raw.lower().split()[0].strip(".,!?\"'")
-        if emotion in VALID_EMOTIONS:
+        emotion = _match_mood(raw)
+        if emotion:
             if attempt > 0:
                 print(f"[QWEN]: succeeded on retry -- raw was messy, parsed to '{emotion}'", flush=True)
             return emotion
@@ -1616,6 +1867,37 @@ async def deactivate_expressive_mode(droid, voice_triggered: bool = False):
         await _play_mode_change_spin(droid)
 
 
+def _phrase_present(phrase: str, lower: str, words: set) -> bool:
+    """Multi-word phrases match as a substring (safe -- they don't occur by
+    accident). Bare single words must match a WHOLE word, so 'run' fires on
+    'run!' but not on 'trunk'/'drunk', and 'away' not on 'hideaway'. Fixes a
+    real bug where 'in the trunk' silently triggered the retreat command."""
+    if " " in phrase:
+        return phrase in lower
+    return phrase in words
+
+
+# Movement gestures are terse, imperative commands ("back up", "come here",
+# "run!"). Their trigger phrases are short and common, so they used to fire on
+# any sentence that happened to contain them -- "back up, are you telling me
+# you're a droid?" and "R2, send for backup" both hit retreat/back even though
+# they're plainly conversation. The gate below keeps a movement gesture only
+# when the utterance actually looks like a command: not a question, and short.
+# Anything longer or ending in '?' falls through to the LLM as an emotion read.
+# Mode toggles (hotel/pet/expressive, sleep/wake) are deliberately NOT gated --
+# their phrases are distinctive enough that this ambiguity doesn't arise.
+_MOVEMENT_GATE_MAX_WORDS = 6
+
+
+def _looks_imperative(text: str) -> bool:
+    t = (text or "").strip()
+    if not t:
+        return False
+    if t.endswith("?"):
+        return False
+    return len(t.split()) <= _MOVEMENT_GATE_MAX_WORDS
+
+
 def check_keywords(text: str) -> str | None:
     """Deterministic phrase matching, checked before Qwen3 ever sees the
     text -- ported near-verbatim from Pi (same phrase lists), minus the
@@ -1625,52 +1907,58 @@ def check_keywords(text: str) -> str | None:
     branch in _handle_transcription is what actually decides whether a
     match gets acted on."""
     lower = text.lower()
+    # Whole-word tokens for the single-word triggers below (punctuation stripped).
+    words = set(_normalize_for_hallucination(text).split())
     if "stay awake" in lower:  return "stay_awake"
     if "go to sleep" in lower: return "go_to_sleep"
     if "that way" in lower:    return "that_way"
 
-    if any(p in lower for p in [
+    if any(_phrase_present(p, lower, words) for p in [
         "activate expressive mode", "go into expressive mode", "start expressive mode",
         "little expressive", "get expressive", "move around", "stretch your legs",
         "start expressive", "feel free to roam", "roll around", "go around"
     ]):
         return "expressive_mode_on"
-    if any(p in lower for p in [
+    if any(_phrase_present(p, lower, words) for p in [
         "end expressive mode", "deactivate expressive mode", "stop moving",
         "stand still", "go stationary", "your done"
     ]):
         return "expressive_mode_off"
 
-    if any(p in lower for p in [
+    if any(_phrase_present(p, lower, words) for p in [
         "keep the air conditioner on", "you're on guard", "you got first watch",
         "activate hotel mode", "start hotel mode", "you're on duty"
     ]):
         return "hotel_mode_on"
-    if any(p in lower for p in [
+    if any(_phrase_present(p, lower, words) for p in [
         "you're off duty", "end hotel mode", "deactivate hotel mode"
     ]):
         return "hotel_mode_off"
 
-    if any(p in lower for p in [
+    if any(_phrase_present(p, lower, words) for p in [
         "go play with the cats", "go play with the dog", "go play with the others",
         "activate pet mode", "go play"
     ]):
         return "pet_mode_on"
-    if any(p in lower for p in [
+    if any(_phrase_present(p, lower, words) for p in [
         "end pet mode", "deactivate pet mode", "stop pet mode", "stop playing around"
     ]):
         return "pet_mode_off"
 
-    if any(p in lower for p in ["come here", "come to me", "get over here", "move forward"]):
-        return "expressive_forward"
-    if any(p in lower for p in ["come back", "don't be like that", "it's okay", "its okay", "sorry about that"]):
-        return "expressive_about_face"
-    if any(p in lower for p in ["back up", "backup", "move back", "step back", "give me space", "back away", "reverse", "away"]):
-        return "expressive_back"
-    if any(p in lower for p in ["hell yeah", "hell yes", "let's go", "lets go", "woohoo", "woo hoo"]):
-        return "expressive_dance"
-    if any(p in lower for p in ["look out", "watch out", "run", "get out of there"]):
-        return "expressive_retreat"
+    # Movement gestures -- only when the utterance looks like a terse command
+    # (see _looks_imperative). Bare one-word "backup" dropped: the movement
+    # command is the two-word "back up"; "send for backup" is conversation.
+    if _looks_imperative(text):
+        if any(_phrase_present(p, lower, words) for p in ["come here", "come to me", "get over here", "move forward"]):
+            return "expressive_forward"
+        if any(_phrase_present(p, lower, words) for p in ["come back", "don't be like that", "it's okay", "its okay", "sorry about that"]):
+            return "expressive_about_face"
+        if any(_phrase_present(p, lower, words) for p in ["back up", "move back", "step back", "give me space", "back away", "reverse", "away"]):
+            return "expressive_back"
+        if any(_phrase_present(p, lower, words) for p in ["hell yeah", "hell yes", "let's go", "lets go", "woohoo", "woo hoo"]):
+            return "expressive_dance"
+        if any(_phrase_present(p, lower, words) for p in ["look out", "watch out", "run", "get out of there"]):
+            return "expressive_retreat"
     return None
 
 
@@ -1845,7 +2133,13 @@ async def discover_droid(mac: str | None = None):
 # ---------------------------------------------------------------------------
 
 STATUS_PORT = 5010
-GLITCH_DISPLAY_SECONDS = 4  # how long "glitched" stays true after a confused
+# Put on emotion_queue when the classifier fails to produce a valid label (a
+# glitch), as opposed to the model genuinely returning "confused". The BLE
+# reader translates it into a confused reaction AND lights the tray "glitched"
+# indicator; a real "confused" reacts without lighting it. Underscored so it can
+# never collide with a real (or custom) mood label.
+GLITCH_SENTINEL = "__glitch__"
+GLITCH_DISPLAY_SECONDS = 4  # how long "glitched" stays true after a glitch
                             # reaction, so the tray icon has time to actually
                             # show it rather than flicker back to idle
 STATUS_STALE_SECONDS = 2    # if the Whisper process hasn't reported mic
@@ -1928,7 +2222,16 @@ class _StatusHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/status":
             with self.server.status_lock:
-                body = json.dumps(self.server.status_ref).encode("utf-8")
+                payload = dict(self.server.status_ref)
+            # Identity fields the user can change from the Mainframe (Save writes
+            # .env). The brain already live-reloads DROID_TYPE for its movement
+            # logic (get_droid_type); mirror that here so the Com Uplink dock
+            # reflects a model/name change without waiting for a brain restart.
+            from dotenv import dotenv_values as _dv
+            _fresh = _dv(ENV_PATH)
+            payload["droid_type"] = _fresh.get("DROID_TYPE") or DROID_TYPE or "R"
+            payload["droid_name"] = _fresh.get("DROID_NAME") or payload.get("droid_name") or ""
+            body = json.dumps(payload).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Access-Control-Allow-Origin", "*")
@@ -2266,9 +2569,11 @@ async def _ble_main(emotion_queue, status_queue, keyword_queue):
 
     # Shared with the status HTTP server thread -- lock-guarded since two
     # threads (this asyncio loop's thread, and the server's request-handling
-    # threads) touch it. droid_mac/droid_name/droid_type are for the
-    # Bluetooth status page -- static for the life of this process (a
-    # droid-model change needs a restart anyway), unlike the live fields.
+    # threads) touch it. droid_mac is static for the life of this process;
+    # droid_name/droid_type are seeded here but re-read fresh from .env in the
+    # /status handler (the Com Uplink dock polls it), so a model or name change
+    # saved from the Mainframe shows up without a brain restart -- matching how
+    # get_droid_type() already live-reloads the model for the movement logic.
     status_ref = {
         "connected": True, "listening": False, "glitched": False, "mic_rms": 0,
         "mapper_active": False, "activation_suppress_until": 0.0, "hotel_mode_active": False,
@@ -2276,6 +2581,11 @@ async def _ble_main(emotion_queue, status_queue, keyword_queue):
         "droid_mac": getattr(droid, "profile", DROID_MAC or ""),
         "droid_name": DROID_NAME,
         "droid_type": DROID_TYPE,
+        # Live Com Uplink feed (v0.86.1): the mood the brain last chose, the
+        # text that triggered it, a rolling log of recent heard/emotion pairs,
+        # and when the last reaction fired. Populated from the Whisper process
+        # via status_queue (see the emotion branch in the reader below).
+        "emotion": None, "heard": "", "recent": [], "last_reaction_ts": 0.0,
     }
     if play_activation:
         # ~30s from here comfortably outlasts the remaining on-screen
@@ -2342,8 +2652,12 @@ async def _ble_main(emotion_queue, status_queue, keyword_queue):
                     mapper_active = status_ref.get("mapper_active", False)
                     suppressed = time.time() < status_ref.get("activation_suppress_until", 0.0)
                 if not mapper_active and not suppressed and not _hotel_mode_active:
-                    if emotion == "confused":
+                    if emotion == GLITCH_SENTINEL:
+                        # A classifier glitch: light the tray indicator and play
+                        # the confused reaction. A REAL "confused" label skips
+                        # this branch, so it reacts without the glitch light.
                         last_glitch_time = time.time()
+                        emotion = "confused"
                     await react_to_emotion(droid, emotion)
             except queue.Empty:
                 pass
@@ -2372,6 +2686,41 @@ async def _ble_main(emotion_queue, status_queue, keyword_queue):
                     update = status_queue.get_nowait()
                 except queue.Empty:
                     break
+                # Com Uplink feed (v0.86.1): emotion updates carry the heard
+                # text + the mood that fired. Record them into the live status
+                # and the rolling recent[] log, then skip the mic-status
+                # handling below -- these carry no rms/speaking payload, so
+                # they must not disturb the "listening" / stale-mic logic.
+                if "gesture" in update:
+                    # A voice command the droid acted on. Logged like an
+                    # emotion but tagged as a gesture so the UI renders it as
+                    # an action, not a feeling. Does NOT touch status_ref
+                    # ["emotion"] -- the live feeling bubble stays on the last
+                    # real mood.
+                    with status_lock:
+                        status_ref["heard"] = update.get("heard", "")
+                        status_ref["last_reaction_ts"] = time.time()
+                        recent = status_ref.get("recent", [])
+                        recent.append({
+                            "heard": update.get("heard", ""),
+                            "gesture": update["gesture"],
+                            "ts": time.time(),
+                        })
+                        status_ref["recent"] = recent[-8:]
+                    continue
+                if "emotion" in update:
+                    with status_lock:
+                        status_ref["emotion"] = update["emotion"]
+                        status_ref["heard"] = update.get("heard", "")
+                        status_ref["last_reaction_ts"] = time.time()
+                        recent = status_ref.get("recent", [])
+                        recent.append({
+                            "heard": update.get("heard", ""),
+                            "emotion": update["emotion"],
+                            "ts": time.time(),
+                        })
+                        status_ref["recent"] = recent[-8:]
+                    continue
                 last_mic_update_time = time.time()
                 with status_lock:
                     status_ref["mic_rms"] = update.get("rms", status_ref["mic_rms"])
@@ -2472,6 +2821,60 @@ def run_ble_process(emotion_queue, status_queue, keyword_queue):
 
 conversation_history = deque(maxlen=HISTORY_LENGTH)
 
+# ---------------------------------------------------------------------------
+# Emotional momentum -- a SOFT prior, never an override.
+# ---------------------------------------------------------------------------
+# A charged feeling lingers for a beat when what follows is calm or ambiguous,
+# but ANY clear new feeling wins instantly: the momentum is injected into the
+# prompt as a line that explicitly yields (see _momentum_line + the guidance in
+# _build_system_prompt), and the LLM decides. The timer below only governs how
+# long an UNREINFORCED feeling hangs on -- it can never force a stale mood over a
+# real new one. Only high-arousal moods linger; neutral/curious/confused never
+# do (absent from the map -> 0), since those are exactly the low-charge states
+# we don't want persisting. A mood sustained ONLY by momentum (it was injected
+# and the model echoed it) burns the timer DOWN rather than refreshing, so it
+# fades on its own instead of looping.
+_MOMENTUM_LINGER = {
+    "scared": 2, "angry": 2, "defensive": 2,   # high-arousal -- linger longest
+    "sad": 1, "disgusted": 1, "excited": 1, "happy": 1,
+}
+_momentum_emotion = None
+_momentum_ttl = 0
+
+
+def _momentum_line() -> str:
+    """The soft-prior prompt line for the feeling still lingering from last
+    turn, or '' when nothing is lingering. Firmness scales with freshness; the
+    line ALWAYS yields to a clear new feeling."""
+    if _momentum_ttl <= 0 or not _momentum_emotion:
+        return ""
+    if _momentum_ttl >= 2:
+        lead = f"You are still feeling {_momentum_emotion} from a moment ago."
+    else:
+        lead = f"A trace of {_momentum_emotion} still lingers from a moment ago."
+    return ("\n" + lead + " If this new line clearly calls for a different "
+            "feeling, feel THAT instead -- a real new reaction always wins. Only "
+            f"stay {_momentum_emotion} if the new line is calm, ambiguous, or "
+            "nothing has changed.\n")
+
+
+def _update_momentum(new_emotion: str, was_injected: bool) -> None:
+    """Advance momentum after a successful classification.
+
+    A genuinely NEW feeling (differs from the lingering one) resets the timer to
+    that feeling's linger budget. The SAME feeling sustained only by momentum
+    (momentum was injected AND the model echoed it) burns the timer DOWN instead
+    of refreshing, so an unreinforced mood fades rather than looping forever. A
+    same-feeling read with NO momentum injected (a fresh, self-standing signal)
+    sets the timer normally. Glitches don't call this at all -- a non-read never
+    changes how the droid feels."""
+    global _momentum_emotion, _momentum_ttl
+    if new_emotion == _momentum_emotion and was_injected:
+        _momentum_ttl -= 1
+    else:
+        _momentum_emotion = new_emotion
+        _momentum_ttl = _MOMENTUM_LINGER.get(new_emotion, 0)
+
 
 def _fetch_ble_status() -> dict:
     """Whisper runs in a separate process from the BLE connection that
@@ -2488,7 +2891,16 @@ def _fetch_ble_status() -> dict:
         return {}
 
 
-def _handle_transcription(text: str, emotion_queue, keyword_queue):
+def _push_gesture(status_queue, text, keyword):
+    """Hand the BLE process a gesture event (heard text + which command fired)
+    for the Com Uplink log. Additive -- never break the command path."""
+    try:
+        status_queue.put({"heard": text, "gesture": keyword})
+    except Exception:
+        pass
+
+
+def _handle_transcription(text: str, emotion_queue, keyword_queue, status_queue):
     """Instead of scheduling a droid reaction directly (no droid connection
     exists in this process at all), this pushes onto one of the two shared
     queues -- the BLE process picks it up and does the actual reacting.
@@ -2516,6 +2928,7 @@ def _handle_transcription(text: str, emotion_queue, keyword_queue):
         if keyword == "hotel_mode_off":
             print("[HOTEL]: Stop command received", flush=True)
             keyword_queue.put(keyword)
+            _push_gesture(status_queue, text, keyword)  # log the acted-on command
         else:
             print("[HOTEL]: Sentry active -- ignoring", flush=True)
         return
@@ -2523,17 +2936,43 @@ def _handle_transcription(text: str, emotion_queue, keyword_queue):
     if keyword:
         print(f"[KEYWORD]  {keyword}", flush=True)
         keyword_queue.put(keyword)
+        # Com Uplink feed (v0.86.1): a voice command is an action, not an
+        # emotion -- log it so the chat shows what was heard and what the droid
+        # DID, distinct from the emotional reactions.
+        _push_gesture(status_queue, text, keyword)
         return
 
-    emotion = get_emotion_test(text, conversation_history)
+    # Momentum: capture the lingering feeling BEFORE classifying (so the model
+    # sees it), and remember whether it was actually injected -- _update_momentum
+    # needs that to tell a momentum-sustained repeat from a fresh self-standing
+    # read. A glitch (emotion is None) leaves momentum untouched.
+    mo_line = _momentum_line()
+    was_injected = bool(mo_line)
+    emotion = get_emotion_test(text, conversation_history, mo_line)
 
     if emotion is None:
         print(f'[REACTION]  *glitched* -- "{DROID_NAME} glitched. Please try again."\n')
-        emotion_queue.put("confused")
+        # A glitch (the classifier couldn't produce a valid label) is NOT the
+        # same as the droid genuinely feeling "confused". Send a dedicated
+        # sentinel so the BLE side lights the tray "glitched" indicator and
+        # plays the confused reaction, while a REAL "confused" classification
+        # (below) drives the reaction WITHOUT tripping the glitch light.
+        emotion_queue.put(GLITCH_SENTINEL)
+        fired = "confused"
     else:
         print(f"[REACTION]  {DROID_NAME} feels: {emotion}\n")
         conversation_history.append((text, emotion))
+        _update_momentum(emotion, was_injected)
         emotion_queue.put(emotion)
+        fired = emotion
+
+    # Com Uplink feed (v0.86.1): hand the BLE process what was heard and the
+    # mood that fired so /status can surface it live. Additive -- must never
+    # break the reaction path if the queue misbehaves.
+    try:
+        status_queue.put({"heard": text, "emotion": fired})
+    except Exception:
+        pass
 
 
 def _whisper_main(emotion_queue, status_queue, keyword_queue, model):
@@ -2681,7 +3120,7 @@ def _whisper_main(emotion_queue, status_queue, keyword_queue, model):
         print(f"\r[transcribing]  ({duration:.1f}s of audio, {reason})...".ljust(60))
         text, elapsed = transcribe_segment(model, segment)
         print(f"[WHISPER]  {elapsed:.2f}s" + (f'  "{text}"' if text else "  (nothing recognized)"))
-        _handle_transcription(text, emotion_queue, keyword_queue)
+        _handle_transcription(text, emotion_queue, keyword_queue, status_queue)
         # Whatever accumulated in audio_queue while transcribe_segment()/
         # _handle_transcription() were blocking (LLM call included) is
         # stale by now -- discard it so the next listen starts from

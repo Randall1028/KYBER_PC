@@ -217,12 +217,28 @@ def stop_kyber_core():
     if kyber_core_proc is None or kyber_core_proc.poll() is not None:
         kyber_core_proc = None
         return
+    pid = kyber_core_proc.pid
     try:
+        # Give the brain a chance to shut down cleanly first (disconnect the
+        # droid, reap its own children) via CTRL_BREAK.
         kyber_core_proc.send_signal(signal.CTRL_BREAK_EVENT)
         kyber_core_proc.wait(timeout=10)
     except Exception:
-        # Didn't shut down cleanly in time -- fall back to a hard stop
-        # rather than hang the tray app's own exit.
+        pass
+    # Then sweep the whole process tree. A plain terminate() is TerminateProcess
+    # on Windows, which kills ONLY the brain's top process and orphans its
+    # Whisper + BLE multiprocessing children -- they linger as leftover
+    # "background processes". taskkill /T kills the entire tree, so nothing is
+    # left behind. Idempotent: a harmless no-op if the brain already exited
+    # cleanly above, and it also stops the old brain's children from orphaning
+    # during a mid-session droid switch (which calls this too).
+    try:
+        subprocess.run(
+            ["taskkill", "/F", "/T", "/PID", str(pid)],
+            creationflags=subprocess.CREATE_NO_WINDOW,
+            timeout=10, capture_output=True,
+        )
+    except Exception:
         try:
             kyber_core_proc.terminate()
         except Exception:
@@ -249,7 +265,12 @@ def watch_for_brain_launch_request():
     since Pi's own real activation sequence fires as part of kyber_core.py's
     first connect, not a separate one-shot step."""
     global mode
-    while mode == "onboarding" and not _shutting_down:
+    # Runs for the whole app lifetime, not just first-boot onboarding. A reset
+    # + re-onboard inside an already-running (already-onboarded) app raises this
+    # flag again from the Activation page -- if we stopped watching after the
+    # first launch, that second request would be ignored and the new droid's
+    # activation would hang forever waiting on a brain that never (re)starts.
+    while not _shutting_down:
         if brain_launch_requested():
             from dotenv import set_key
             set_key(ENV_PATH, "BRAIN_LAUNCH_REQUESTED", "0")  # consume it --
@@ -258,8 +279,15 @@ def watch_for_brain_launch_request():
                                                                # kyber_core.py's
                                                                # own flag
             mode = "running"
+            # Switching droids: an old brain may still be running against the
+            # previous (now powered-off) droid. Stop it before launching a
+            # fresh one for the new droid, or /status never reports the new
+            # droid connected and Activation stalls at "final checks". No-op
+            # on the first-ever onboarding when no brain is running yet.
+            stop_kyber_core()
             launch_kyber_core()
-            return
+            # Deliberately keep looping (no return) so every later droid-switch
+            # is caught, not just the first launch.
         time.sleep(ONBOARDING_FLAG_POLL_INTERVAL)
 
 
@@ -344,6 +372,10 @@ def main():
         mode = "running"
         launch_kyber_core()
         launch_config_server()
+        # Watch even in the already-onboarded case: a mid-session reset +
+        # re-onboard needs the brain relaunched for the new droid, and the
+        # watcher is what does that (stop old brain -> launch new).
+        Thread(target=watch_for_brain_launch_request, daemon=True).start()
         # Safe to run both now -- kyber_config_server.py's own main() skips
         # starting its mic stream whenever ONBOARDING_COMPLETE is set, so
         # there's no device-contention risk with kyber_core.py's Whisper
